@@ -4479,7 +4479,10 @@
               elevation: "Elevation",
               segment_length: "Segment length",
               type: "Type",
-              legend: "Legend"
+              legend: "Legend",
+              selection_ascend: "Elevation Gain",
+              selection_descend: "Elevation Loss",
+              selection_dist: "Selected distance"
           },
           _init_options() {
               this._margin = this.options.margins;
@@ -4988,6 +4991,24 @@
                   .attr("y", -this._y(boxPosition) + 4 * textDistance)
                   .attr("id", "heightgraph.type")
                   .text(this._getTranslation('type') + ':');
+              // text line 5
+               this._focusSelectionAscend = this._focus.append("text")
+                   .attr("x", 7)
+                   .attr("y", -this._y(boxPosition) + 5 * textDistance)
+                   .attr("id", "heightgraph.select_asc")
+                   .text(this._getTranslation('selection_ascend') + ':');
+               // text line 6
+               this._focusSelectionDescend = this._focus.append("text")
+                   .attr("x", 7)
+                   .attr("y", -this._y(boxPosition) + 6 * textDistance)
+                   .attr("id", "heightgraph.select_desc")
+                   .text(this._getTranslation('selection_descend') + ':');
+               // text line 7
+               this._focusSelectionDistance = this._focus.append("text")
+                   .attr("x", 7)
+                   .attr("y", -this._y(boxPosition) + 7 * textDistance)
+                   .attr("id", "heightgraph.select_dist")
+                   .text(this._getTranslation('selection_dist') + ':');
               this._areaTspan = this._focusBlockDistance.append('tspan')
                   .attr("class", "tspan");
               this._typeTspan = this._focusType.append('tspan')
@@ -5005,6 +5026,12 @@
                   .attr("class", "tspan");
               this._altTspan = this._focusHeight.append('tspan')
                   .attr("class", "tspan");
+              this._selAscTspan = this._focusSelectionAscend.append('tspan')
+                   .attr("class", "tspan");
+               this._selDescTspan = this._focusSelectionDescend.append('tspan')
+                   .attr("class", "tspan");
+               this._selDistTspan = this._focusSelectionDistance.append('tspan')
+                   .attr("class", "tspan");
           },
           /**
            *  Creates horizontal Line for dragging
@@ -5475,17 +5502,20 @@
               }
               // initialize the vars for the closest item calculation
               let closestItem = null;
+              let closestItemIx = -1;
               // large enough to be trumped by any point on the chart
               let closestDistance = 2 * Math.pow(100, 2);
               // consider a good enough match if the given point (lat and lng) is within
               // 1.1 meters of a point on the chart (there are 111,111 meters in a degree)
               const exactMatchRounding = 1.1 / 111111;
-              for (let item of this._areasFlattended) {
+              // In order to ease cumulated calculations, we pass the index as well as the item
+              // to the mouse handler.
+              for (let [ix, item] of this._areasFlattended.entries()) {
                   let latDiff = event.latlng.lat - item.latlng.lat;
                   let lngDiff = event.latlng.lng - item.latlng.lng;
                   // first check for an almost exact match; it's simple and avoid further calculations
                   if (Math.abs(latDiff) < exactMatchRounding && Math.abs(lngDiff) < exactMatchRounding) {
-                      this._internalMousemoveHandler(item, showMapMarker);
+                      this._internalMousemoveHandler(item, ix, showMapMarker);
                       break;
                   }
                   // calculate the squared distance from the current to the given;
@@ -5493,24 +5523,26 @@
                   const distance = Math.pow(latDiff, 2) + Math.pow(lngDiff, 2);
                   if (distance < closestDistance) {
                       closestItem = item;
+                      closestItemIx = ix;
                       closestDistance = distance;
                   }
               }
 
-              if (closestItem) this._internalMousemoveHandler(closestItem, showMapMarker);
+              if (closestItem) this._internalMousemoveHandler(closestItem, closestItemIx, showMapMarker);
           },
           /*
            * Handles the mouseover the chart and displays distance and altitude level
            */
           _mousemoveHandler(d, i, ctx) {
               const coords = mouse(this._svg.node());
-              const item = this._areasFlattended[this._findItemForX(coords[0])];
-              if (item) this._internalMousemoveHandler(item);
+              const ix = this._findItemForX(coords[0]);
+              const item = this._areasFlattended[ix];
+              if (item) this._internalMousemoveHandler(item, ix);
           },
           /*
            * Handles the mouseover, given the current item the mouse is over
            */
-          _internalMousemoveHandler(item, showMapMarker = true) {
+          _internalMousemoveHandler(item, ix, showMapMarker = true) {
               let areaLength;
               const alt = this._defined(item) ? item.altitude : '-', dist = item.position,
                   ll = item.latlng, areaIdx = item.areaIdx, type = item.type;
@@ -5522,6 +5554,25 @@
               }
               if (showMapMarker) {
                   this._showMapMarker(ll, alt, type);
+              }
+              // If the user has selected an area, show the cumulated values
+              if (this._dragStartCoords) {
+                console.log("Currently dragging");
+                let ix1 = this._findItemForX(this._dragStartCoords[0]);
+                let [dst, ascend, descend] = this._cumulatedValues(ix1, ix);
+                this._focusSelectionAscend.style("display", "block");
+                this._focusSelectionDescend.style("display", "block");
+                this._focusSelectionDistance.style("display", "block");
+                this._selAscTspan.text(" " + ascend.toFixed(1) + " m");
+                this._selDescTspan.text(" " + descend.toFixed(1)+ " m");
+                this._selDistTspan.text(" " + (dst/1000.0).toFixed(1) + " km");
+                this._focusRect.attr("height", 7 * 15 + 5);
+              // If the area has been removed, hide them again.
+              } else if (!this._dragRectangle){
+                this._focusSelectionAscend.style("display", "none");
+                this._focusSelectionDescend.style("display", "none");
+                this._focusSelectionDistance.style("display", "none");
+                this._focusRect.attr("height", 4 * 15 + 5);
               }
               this._distTspan.text(" " + dist.toFixed(1) + ' km');
               this._altTspan.text(" " + alt + ' m');
@@ -5541,6 +5592,60 @@
                   this._focus.style("display", "initial")
                       .attr("transform", "translate(" + xPositionBox + "," + this._y(this._elevationBounds.min) + ")");
               }
+          },
+          _cumulatedValues(ix1, ix2) {
+             // To avoid unneccessary recalculations for minimal changes, the previous calculation is returned
+             // if the previous calculation is less than 300ms old, and if the selection has changed by less than 5 segments.
+             if (this._prev_cumulation) {
+               if ((Math.abs(this._prev_cumulation[0] - Math.abs(ix1-ix2)) < 5) && (Date.now()-this._prev_cumulation[1] < 300)) {
+                 return this._prev_cumulation[2];
+               }
+             }
+             let prev = null;
+             let dst = 0.0;
+             let ascend = 0.0;
+             let descend = 0.0;
+             // Cumulated height difference over a short segment
+             let delta_hd = 0.0;
+             // Cumulated distance for the short segment
+             let delta_dst = 0.0;
+             for (let ix = Math.min(ix1, ix2); ix <= Math.max(ix1, ix2); ix++) {
+               let item = this._areasFlattended[ix];
+               if (!prev){
+                 prev = item;
+                 continue;
+               }
+               let single_dst = prev.latlng.distanceTo(item.latlng);
+               // 
+               delta_dst += single_dst;
+               dst += single_dst;
+               let hdiff = item.altitude - prev.altitude;
+               delta_hd += hdiff;
+               let abs_hd = Math.abs(delta_hd);
+               prev = item;
+               // To correct for small fluctuations, only absolute height differences of 10 meters or more are 
+               // taken into account. If the distance is too small (<12m), only height differences of 15 meters or more
+               // are taken into account.
+               if (((delta_dst < 12) && (abs_hd < 15)) || (abs_hd < 10)) {
+                 continue;
+               }
+               if (delta_hd > 0) {
+                 ascend += delta_hd;
+               } else {
+                 descend += -delta_hd;
+               }
+               delta_hd = 0.0;
+               delta_dst = 0.0;
+             }
+             // Finally, add the rest.
+             if (delta_hd > 0) {
+               ascend += delta_hd;
+             } else {
+               descend += -delta_hd;
+             }
+             let vals = [dst, ascend, descend];
+             this._prev_cumulation = [Math.abs(ix1-ix2), Date.now(), vals];
+             return vals;
           },
           /*
            * Finds a data entry for a given x-coordinate of the diagram
