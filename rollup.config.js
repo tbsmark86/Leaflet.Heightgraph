@@ -1,7 +1,4 @@
 import nodeResolve from '@rollup/plugin-node-resolve'
-import {terser} from 'rollup-plugin-terser'
-import babel from '@rollup/plugin-babel'
-import css from 'rollup-plugin-css-porter'
 import copy from 'rollup-plugin-copy'
 
 // noinspection JSUnusedGlobalSymbols
@@ -10,31 +7,19 @@ export default {
     output: [
         {
             file: 'dist/L.Control.Heightgraph.js',
-            format: 'iife'
-        },
-        {
-            file: 'dist/L.Control.Heightgraph.min.js',
             format: 'iife',
-            name: 'version',
-            plugins: [terser()]
-        }
-
+	    /* for safer user by the next bundler */
+	    banner: ';'
+        },
     ],
     plugins: [
         nodeResolve({
             mainFields: ['module','jsnext', 'main']
         }),
-        babel({
-            exclude: "node_modules/**", // only transpile our source code
-            babelHelpers: 'bundled'
-        }),
-        css({
-            raw: 'dist/L.Control.Heightgraph.css',
-            minified: 'dist/L.Control.Heightgraph.min.css'
-        }),
         copy({
             targets: [
-                { src: 'src/img/**/*', dest: 'dist/img'}
+                { src: 'src/img/**/*', dest: 'dist/img'},
+                { src: 'src/*.css', dest: 'dist/'}
             ]
         })
     ],
