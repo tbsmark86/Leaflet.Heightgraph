@@ -4600,9 +4600,7 @@
               const dragEndCoords = this._dragCurrentCoords = this._dragCache.end = mouse(this._background.node());
               const x1 = Math.min(this._dragStartCoords[0], dragEndCoords[0]),
                   x2 = Math.max(this._dragStartCoords[0], dragEndCoords[0]);
-              if (!this._dragRectangle && !this._dragRectangleG) {
-                  const g = select(this._container).select("svg").select("g");
-                  this._dragRectangleG = g.append("g");
+              if (!this._dragRectangle) {
                   this._dragRectangle = this._dragRectangleG.append("rect")
                       .attr("width", x2 - x1)
                       .attr("height", this._svgHeight)
@@ -4621,9 +4619,8 @@
            * @param {boolean} skipMapFitBounds - whether to zoom the map back to the total extent of the data
            */
           _resetDrag(skipMapFitBounds) {
-              if (this._dragRectangleG) {
-                  this._dragRectangleG.remove();
-                  this._dragRectangleG = null;
+              if (this._dragRectangle) {
+                  this._dragRectangle.remove();
                   this._dragRectangle = null;
 
                   if (skipMapFitBounds !== true) {
@@ -4946,6 +4943,7 @@
               for (let i = 0; i < areas.length; i++) {
                   this._appendAreas(areas[i], idx, i);
               }
+  	    this._dragRectangleG = this._svg.append("g");
               this._createFocus();
               this._appendBackground();
               this._createBorderTopLine();
