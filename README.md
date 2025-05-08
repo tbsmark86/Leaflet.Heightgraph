@@ -1,3 +1,10 @@
+# Forked!
+
+This is a forked version with fixes for use in brouter-web.
+
+Following readme is outdated in some aspectes!
+
+
 # Leaflet.Heightgraph
 
 This plugin is inspired by [MrMufflon/Leaflet.Elevation](https://github.com/MrMufflon/Leaflet.Elevation).
