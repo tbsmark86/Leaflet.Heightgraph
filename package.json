@@ -27,7 +27,7 @@
     "@rollup/plugin-node-resolve": "^8.4.0",
     "d3": "^5.16.0",
     "d3-selection-multi": "^1.0.1",
-    "es-dev-server": "^1.57.0",
+    "es-dev-server": "^2.0.0",
     "jasmine-core": "^5.0.0",
     "karma": "^6.0.0",
     "karma-chrome-launcher": "^3.1.0",
