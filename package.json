@@ -14,11 +14,12 @@
     "build": "rollup -c",
     "test": "karma start"
   },
-  "license": "ISC",
-  "dependencies": {
+  "license": "MIT",
+  "peerDependencies": {
     "leaflet": "^1.6.0"
   },
   "devDependencies": {
+    "leaflet": "^1.6.0",
     "@open-wc/karma-esm": "^4.0.0",
     "@rollup/plugin-commonjs": "^28.0.0",
     "@rollup/plugin-node-resolve": "^16.0.0",
