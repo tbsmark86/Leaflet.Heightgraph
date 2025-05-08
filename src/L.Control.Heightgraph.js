@@ -63,9 +63,10 @@ import {
             segment_length: "Segment length",
             type: "Type",
             legend: "Legend",
+            selection: "Current selection",
+            selection_dist: "Distance",
             selection_ascend: "Elevation Gain",
             selection_descend: "Elevation Loss",
-            selection_dist: "Selected distance"
         },
         _init_options() {
             this._margin = this.options.margins;
@@ -213,6 +214,7 @@ import {
                     // we could cache the full extend when addData() is called
                     let fullExtent = this._calculateFullExtent(this._areasFlattended);
                     if (fullExtent) this._map.fitBounds(fullExtent);
+	            this._focusHideSelection();
                 }
             }
         },
@@ -574,24 +576,30 @@ import {
                 .attr("y", -this._y(boxPosition) + 4 * textDistance)
                 .attr("id", "heightgraph.type")
                 .text(this._getTranslation('type') + ':');
-            // text line 5
-             this._focusSelectionAscend = this._focus.append("text")
-                 .attr("x", 7)
-                 .attr("y", -this._y(boxPosition) + 5 * textDistance)
-                 .attr("id", "heightgraph.select_asc")
-                 .text(this._getTranslation('selection_ascend') + ':');
-             // text line 6
-             this._focusSelectionDescend = this._focus.append("text")
-                 .attr("x", 7)
-                 .attr("y", -this._y(boxPosition) + 6 * textDistance)
-                 .attr("id", "heightgraph.select_desc")
-                 .text(this._getTranslation('selection_descend') + ':');
-             // text line 7
-             this._focusSelectionDistance = this._focus.append("text")
-                 .attr("x", 7)
-                 .attr("y", -this._y(boxPosition) + 7 * textDistance)
-                 .attr("id", "heightgraph.select_dist")
-                 .text(this._getTranslation('selection_dist') + ':');
+	    // text line 5 (optional)
+	    this._focusSelection = this._focus.append("text")
+		.attr("x", 7)
+		.attr("y", -this._y(boxPosition) + 5 * textDistance)
+		.attr("id", "heightgraph.select")
+		.text(this._getTranslation('selection'));
+	    // text line 6
+	    this._focusSelectionDistance = this._focus.append("text")
+		.attr("x", 15)
+		.attr("y", -this._y(boxPosition) + 6 * textDistance)
+		.attr("id", "heightgraph.select_dist")
+		.text(this._getTranslation('selection_dist') + ':');
+	   // text line 7
+	    this._focusSelectionAscend = this._focus.append("text")
+		.attr("x", 15)
+		.attr("y", -this._y(boxPosition) + 7 * textDistance)
+		.attr("id", "heightgraph.select_asc")
+		.text(this._getTranslation('selection_ascend') + ':');
+	    // text line 8
+	    this._focusSelectionDescend = this._focus.append("text")
+		.attr("x", 15)
+		.attr("y", -this._y(boxPosition) + 8 * textDistance)
+		.attr("id", "heightgraph.select_desc")
+		.text(this._getTranslation('selection_descend') + ':');
             this._areaTspan = this._focusBlockDistance.append('tspan')
                 .attr("class", "tspan");
             this._typeTspan = this._focusType.append('tspan')
@@ -609,13 +617,20 @@ import {
                 .attr("class", "tspan");
             this._altTspan = this._focusHeight.append('tspan')
                 .attr("class", "tspan");
+            this._selDistTspan = this._focusSelectionDistance.append('tspan')
+                 .attr("class", "tspan");
             this._selAscTspan = this._focusSelectionAscend.append('tspan')
                  .attr("class", "tspan");
-             this._selDescTspan = this._focusSelectionDescend.append('tspan')
-                 .attr("class", "tspan");
-             this._selDistTspan = this._focusSelectionDistance.append('tspan')
+            this._selDescTspan = this._focusSelectionDescend.append('tspan')
                  .attr("class", "tspan");
         },
+        _focusHideSelection() {
+	    this._focusSelection.style("display", "none");
+	    this._focusSelectionAscend.style("display", "none");
+	    this._focusSelectionDescend.style("display", "none");
+	    this._focusSelectionDistance.style("display", "none");
+	    this._focusRect.attr("height", 4 * 15 + 5);
+	},
         /**
          *  Creates horizontal Line for dragging
          */
@@ -1140,22 +1155,19 @@ import {
             }
             // If the user has selected an area, show the cumulated values
             if (this._dragStartCoords) {
-              console.log("Currently dragging");
               let ix1 = this._findItemForX(this._dragStartCoords[0]);
               let [dst, ascend, descend] = this._cumulatedValues(ix1, ix);
+              this._focusSelection.style("display", "block");
               this._focusSelectionAscend.style("display", "block");
               this._focusSelectionDescend.style("display", "block");
               this._focusSelectionDistance.style("display", "block");
               this._selAscTspan.text(" " + ascend.toFixed(1) + " m");
               this._selDescTspan.text(" " + descend.toFixed(1)+ " m");
               this._selDistTspan.text(" " + (dst/1000.0).toFixed(1) + " km");
-              this._focusRect.attr("height", 7 * 15 + 5);
+              this._focusRect.attr("height", 8 * 15 + 5);
             // If the area has been removed, hide them again.
             } else if (!this._dragRectangle){
-              this._focusSelectionAscend.style("display", "none");
-              this._focusSelectionDescend.style("display", "none");
-              this._focusSelectionDistance.style("display", "none");
-              this._focusRect.attr("height", 4 * 15 + 5);
+	      this._focusHideSelection();
             }
             this._distTspan.text(" " + dist.toFixed(1) + ' km');
             this._altTspan.text(" " + alt + ' m');
