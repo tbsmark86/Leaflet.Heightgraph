@@ -25,18 +25,7 @@ module.exports = (config) => {
         reporters: [
             "progress",
             "kjhtml",
-            "coverage"
         ],
-        // TODO: coverage reports currently not working
-        coverageReporter: {
-            dir: "coverage/",
-            reporters: [
-                {type: "html", subdir: "html"},
-                {type: "lcovonly", subdir: "../coverage"},
-                {type: "json", subdir: "../coverage"},
-                {type: "text-summary"}
-            ],
-        },
         esm: {
             nodeResolve: true
         },
