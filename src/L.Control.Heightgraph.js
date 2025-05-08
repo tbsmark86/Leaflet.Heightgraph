@@ -463,7 +463,9 @@ import {
             const layerPoint = this._map.latLngToLayerPoint(ll)
             const normalizedY = layerPoint.y - 75
             if (!this._mouseHeightFocus) {
-                const heightG = select(".leaflet-overlay-pane svg").append("g")
+		const svg = L.svg({pane: 'tooltipPane'}).addTo(this._map);
+		const heightG = select(svg._container).append("g");
+		svg._container.style.pointerEvents = 'none';
                 this._mouseHeightFocus = heightG.append('svg:line')
                     .attr('class', 'height-focus line')
                     .attr('x2', '0')
