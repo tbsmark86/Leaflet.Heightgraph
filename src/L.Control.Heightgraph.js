@@ -62,7 +62,6 @@ import {
             elevation: "Elevation",
             segment_length: "Segment length",
             type: "Type",
-            legend: "Legend",
             selection: "Current selection",
             selection_dist: "Distance",
             selection_ascend: "Elevation Gain",
@@ -306,9 +305,6 @@ import {
                 // remove top border
                 this._svg.selectAll("path.border-top")
                     .remove();
-                // remove legend
-                this._svg.selectAll(".legend")
-                    .remove();
                 // remove horizontal Line
                 this._svg.selectAll(".lineSelection")
                     .remove();
@@ -354,7 +350,6 @@ import {
                     distances: [],
                     attributes: [],
                     geometries: [],
-                    legend: {}
                 };
                 let i, cnt = 0
                 const usedColors = {}
@@ -391,10 +386,6 @@ import {
                         type: attributeType, text: text, color: color
                     }
                     this._categories[y].attributes.push(attribute);
-                    // add to legend
-                    if (!(attributeType in this._categories[y].legend)) {
-                        this._categories[y].legend[attributeType] = attribute;
-                    }
                     for (let j = 0; j < coordsLength; j++) {
                         ptA = new L.LatLng(data[y].features[i].geometry.coordinates[j][1], data[y].features[i].geometry.coordinates[j][0]);
                         altitude = data[y].features[i].geometry.coordinates[j][2];
@@ -530,7 +521,6 @@ import {
             this._createFocus();
             this._appendBackground();
             this._createBorderTopLine();
-            this._createLegend();
             this._createHorizontalLine();
         },
         /**
@@ -953,83 +943,7 @@ import {
                 self._createChart(idx)
             }
         },
-        /**
-         * Creates and appends legend to chart
-         */
-        _createLegend() {
-            const self = this
-            const data = []
-            if (this._categories.length > 0) {
-                for (let item in this._categories[this.options.selectedAttributeIdx].legend) {
-                    data.push(this._categories[this.options.selectedAttributeIdx].legend[item]);
-                }
-            }
-            const height = this._height - this._margin.bottom
-            const verticalItemPosition = height + this._margin.bottom / 2
-            const leg = [
-                {
-                    "text": this._getTranslation("legend")
-                }
-            ]
-            const legendRectSize = 7
-            const legendSpacing = 7
-            const legend = this._svg.selectAll(".hlegend-hover").data(data).enter().append("g").attr("class", "legend").
-                style("display", "none").attr("transform", (d, i) => {
-                    const height = legendRectSize + legendSpacing
-                    const offset = height * 2
-                    const horizontal = legendRectSize - 15
-                    const vertical = i * height - offset
-                    return "translate(" + horizontal + "," + vertical + ")"
-                })
-            const legendRect = legend.append('rect')
-                .attr('class', 'legend-rect')
-                .attr('x', 15)
-                .attr('y', 6 * 6)
-                .attr('width', 6)
-                .attr('height', 6);
-            if (Object.keys(this._graphStyle).length !== 0) {
-                legendRect.styles(this._graphStyle)
-                    .style('stroke', (d, i) => d.color)
-                    .style('fill', (d, i) => d.color);
-            } else {
-                legendRect.style('stroke', 'black')
-                    .style('fill', (d, i) => d.color);
-            }
-            legend.append('text')
-                .attr('class', 'legend-text')
-                .attr('x', 30)
-                .attr('y', 6 * 7)
-                .text((d, i) => {
-                    const textProp = d.text
-                    self._boxBoundY = (height - (2 * height / 3) + 7) * i;
-                    return textProp;
-                });
-            let legendHover = this._svg.selectAll('.legend-hover')
-                .data(leg)
-                .enter()
-                .append('g')
-                .attr('class', 'legend-hover');
-            this._showLegend = false
-            legendHover.append('text')
-                .attr('x', 15)
-                .attr('y', verticalItemPosition)
-                .attr('text-anchor', "start")
-                .text((d, i) => d.text)
-                .on('mouseover', () => {
-                    selectAll('.legend')
-                        .style("display", "block");
-                })
-                .on('mouseleave', () => {
-                    if (!this._showLegend) {
-                        selectAll('.legend')
-                            .style("display", "none");
-                    }
-                })
-                .on('click', () => {
-                    this._showLegend = !this._showLegend
-                })
-                ;
-        }, /**
+	/**
          * calculates the margins of boxes
          * @param {String} className: name of the class
          * @return {array} borders: number of text lines, widest range of text
