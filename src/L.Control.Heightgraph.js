@@ -117,6 +117,7 @@ import {
          * @private
          */
         _addData(data) {
+	    return;
             if (this._svg !== undefined) {
                 this._svg.selectAll("*")
                     .remove();
@@ -138,6 +139,167 @@ import {
             }
             this._createSelectionBox();
         },
+
+	/**
+	 * Sets the palette gradient.
+	 * Lifted from leaflet.hotline
+	 * @param {Object.<number, string>} palette  - Gradient definition.
+	 * e.g. { 0.0: 'white', 1.0: 'black' }
+	 *
+	 * options.size will limit how colorful the result will be.
+	 * Hotline uses 256 but might be better to use a bit lese here.
+	 */
+	palette: function (options) {
+		const palette = options.palette || {
+			0.0: 'green',
+			0.5: 'yellow',
+			1.0: 'red'
+		};
+		let size = options.palette_count || 30;
+		var canvas = document.createElement('canvas'),
+				ctx = canvas.getContext('2d'),
+				gradient = ctx.createLinearGradient(0, 0, 0, size);
+
+		canvas.width = 1;
+		canvas.height = size;
+
+		for (var i in palette) {
+			gradient.addColorStop(i, palette[i]);
+		}
+
+		ctx.fillStyle = gradient;
+		ctx.fillRect(0, 0, 1, size);
+
+		this._palette = ctx.getImageData(0, 0, 1, size).data;
+		this._palette.min = options.min;
+		this._palette.max = options.max;
+		this._palette.size = size;
+
+		return this;
+	},
+	/**
+	 * Gets the RGB values of a given z value of the current palette.
+	 * Lifted from leaflet.hotline
+	 * @param {number} value - Value to get the color for, should be between min and max.
+	 * @returns {Array.<number>} The RGB values as an array [r, g, b]
+	 */
+	getRGBForValue: function (value) {
+		const palette = this._palette;
+		var valueRelative = Math.min(Math.max((value - palette.min) / (palette.max - palette.min), 0), 0.999);
+		var paletteIndex = Math.floor(valueRelative * palette.size) * 4;
+
+		return `rgb(${palette[paletteIndex]},${palette[paletteIndex + 1]},${palette[paletteIndex + 2]})`;
+	},
+	/** new style drawing expect
+	 *  TODO: finalize data format away from ad-hoc solution!
+	 */
+	addData2(data, options) {
+	    if (this._svg !== undefined) {
+                this._svg.selectAll("*")
+                    .remove();
+            }
+            if (!data || this.options.selectedAttributeIdx >= data.length) {
+                this.options.selectedAttributeIdx = 0;
+            }
+            this._removeMarkedSegmentsOnMap();
+            this._resetDrag(true);
+
+	    this._data = data;
+            this._init_options();
+	    // TODO: Palette currently requires min/max option make those optional
+	    // by calculating them on-demand
+	    // TODO merge into init_options and integrate new style options into
+	    // old ones
+	    this.palette(options);
+
+	    const drawData = this._prepareData2(data);
+            this._appendScales();
+            this._appendGrid();
+	    this._drawData2(data, drawData);
+
+	    this._dragRectangleG = this._svg.append("g");
+	    this._createFocus();
+	    this._appendBackground();
+	    this._createHorizontalLine();
+	    // TODO: convert to new format? Or drop!
+	    //this._createSelectionBox();
+	},
+	_prepareData2(data) {
+	    let maxAlt = 10, minAlt = 0;
+	    for(const point of data) {
+		maxAlt = Math.max(maxAlt, point.latLng.alt);
+		minAlt = Math.min(minAlt, point.latLng.alt);
+	    }
+	    let altitudeRange = maxAlt - minAlt;
+            this._elevationBounds = {
+                min: altitudeRange < 10 ? minAlt - 10 : minAlt - 0.1 * altitudeRange,
+                max: altitudeRange < 10 ? maxAlt + 10 : maxAlt + 0.1 * altitudeRange
+            };
+	    altitudeRange = this._elevationBounds.max - this._elevationBounds.min;
+	    // for ease of calculation we normalizes altitude to start at zero
+	    // for the actual drawing.
+	    const altitudeOffset = Math.abs(this._elevationBounds.min);
+
+	    let cumDistance = 0;
+	    let lastPoint = null;
+	    let pathlist = ['M0 0'];
+	    let colors = [];
+	    let lastColor = null;
+	    for(const point of data) {
+		let curLatLg = new L.LatLng(point[1], point[0]);
+		if(lastPoint != null) {
+		    cumDistance += lastPoint.distanceTo(curLatLg);
+		    lastPoint = curLatLg;
+		}
+		lastPoint = curLatLg;
+
+		// Because svg will translate/transform everything anyway why bother
+		// converting it? just just meters for both axes directly ...
+		// Possible limits are 32bit for values so avoid tracks longer then
+		// 2,147,483 km!
+		pathlist.push(`L${cumDistance} ${(point.latLng.alt||0)+altitudeOffset}`);
+
+		const pointColor = this.getRGBForValue(point[2]);
+		if(pointColor != lastColor) {
+		    colors.push([cumDistance, pointColor]);
+		    lastColor = pointColor;
+		}
+	    }
+            this._totalDistance = cumDistance / 1000;
+
+	    return {altitudeRange, cumDistance, pathlist, colors};
+	},
+	_drawData2(data, prepared) {
+	    const {altitudeRange, cumDistance, pathlist, colors} = prepared;
+	    this._areapath = this._svg.append('path')
+		.attr('class', 'area');
+
+	    if(cumDistance === 0) {
+		return;
+	    }
+	    const gradient = this._svg.append('defs').append('linearGradient')
+		.attr('id', 'graph')
+		.attr('x1', 0).attr('x2', 1)
+		.attr('y1', 0).attr('y2', 0);
+	    for(const colorStop of colors) {
+		gradient.append('stop')
+		    .attr('offset', (colorStop[0]/cumDistance)*100+'%')
+		    .attr('stop-color', colorStop[1]);
+	    }
+
+	    pathlist.push(`L${cumDistance} 0`);
+	    pathlist.push('Z');
+	    this._areapath
+		.attr('d', pathlist.join(''))
+		.attr('stroke', 'green')
+		.styles(this._graphStyle)
+		.style('fill', 'url(#graph)')
+		.style('pointer-events', 'none')
+		// Scale our meters into the actual graph
+		// Also our altitude values are inverse to svg coordinates so we simply
+		// flip everything
+		.style('transform', `translate(-1px, ${this._svgHeight}px) scale(${this._svgWidth/cumDistance}, ${this._svgHeight/altitudeRange}) rotateX(180deg)`);
+	},
         resize(size) {
             if (size.width)
                 this.options.width = size.width;
@@ -329,8 +491,9 @@ import {
          * Prepares the data needed for the height graph
          */
         _prepareData() {
-            this._coordinates = [];
+	    // Notiz dient nur der min/max rechnung. Totale verschwendung im array?
             this._elevations = [];
+	    // ist im grunde ein lokales array ...
             this._cumulatedDistances = [];
             this._cumulatedDistances.push(0);
             this._categories = [];
@@ -398,14 +561,12 @@ import {
                             cumDistance += ptDistance;
                             if (y === 0) {
                                 this._elevations.push(altitude);
-                                this._coordinates.push(ptA);
                                 this._cumulatedDistances.push(cumDistance);
                             }
                             cnt += 1;
                         } else if (j === coordsLength - 1 && i === data[y].features.length - 1) {
                             if (y === 0) {
                                 this._elevations.push(altitude);
-                                this._coordinates.push(ptB);
                             }
                             cnt += 1;
                         }
@@ -834,6 +995,30 @@ import {
                 .style("fill", c)
                 .style("pointer-events", "none");
         },
+
+_appendAreas2(block, c) {
+            const self = this
+            const area = this._area = d3Area()
+                .x(d => {
+                    const xDiagonalCoordinate = self._x(d.position)
+                    d.xDiagonalCoordinate = xDiagonalCoordinate
+                    return xDiagonalCoordinate
+                })
+                .y0(this._svgHeight)
+                .y1(d => self._y(d.altitude))
+                .curve(curveLinear)
+                .defined(this._defined)
+            this._areapath = this._svg.append("path")
+                .attr("class", "area");
+            this._areapath.datum(block)
+                .attr("d", this._area)
+                .attr("stroke", c)
+                .styles(this._graphStyle)
+                .style("fill", c)
+                .style("pointer-events", "none");
+        },
+
+
         // grid lines in x axis function
         _make_x_axis() {
             return axisBottom()
@@ -961,6 +1146,7 @@ import {
         },
         /**
          * Creates top border line on graph
+	 * XXX no longer used in new design unclear whats the point in old design
          */
         _createBorderTopLine() {
             const self = this
@@ -1044,6 +1230,8 @@ import {
          * Handles the mouseover the chart and displays distance and altitude level
          */
         _mousemoveHandler(d, i, ctx) {
+	    // XXX not working in new format
+	    return;
             const coords = mouse(this._svg.node())
             const ix = this._findItemForX(coords[0]);
             const item = this._areasFlattended[ix];
