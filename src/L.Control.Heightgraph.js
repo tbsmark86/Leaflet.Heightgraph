@@ -1,19 +1,11 @@
 import { select, selectAll, mouse } from 'd3-selection'
 import 'd3-selection-multi'
-import { scaleOrdinal, scaleLinear } from 'd3-scale'
-import { min as d3Min, max as d3Max, bisector } from 'd3-array'
+import { scaleLinear } from 'd3-scale'
+import { max as d3Max, bisector } from 'd3-array'
 import { drag } from 'd3-drag'
 import { axisLeft, axisBottom } from 'd3-axis'
 import { format } from 'd3-format'
-import { curveBasis, curveLinear, line, area as d3Area, symbol, symbolTriangle } from 'd3-shape'
-import {
-    schemeAccent,
-    schemeDark2,
-    schemeSet2,
-    schemeCategory10,
-    schemeSet3,
-    schemePaired
-} from 'd3-scale-chromatic'
+import { symbol, symbolTriangle } from 'd3-shape'
 (function (factory, window) {
 
     // define an AMD module that relies on 'leaflet'
@@ -45,13 +37,10 @@ import {
                 bottom: 55,
                 left: 50
             },
-            mappings: undefined,
             expand: true,
             expandControls: true,
             translation: {},
             expandCallback: undefined,
-            chooseSelectionCallback: undefined,
-            selectedAttributeIdx: 0,
             xTicks: undefined,
             yTicks: undefined,
             highlightStyle: undefined,
@@ -79,13 +68,12 @@ import {
             this._margin = this.options.margins;
             this._width = this.options.width;
             this._height = this.options.height;
-            this._mappings = this.options.mappings;
             this._svgWidth = this._width - this._margin.left - this._margin.right;
             this._svgHeight = this._height - this._margin.top - this._margin.bottom;
             this._highlightStyle = this.options.highlightStyle || { color: 'red' }
             this._graphStyle = this.options.graphStyle || {}
             this._dragCache = {}
-	    this.init_palette();
+	    this.initPalette();
         },
         onAdd(map) {
             let container = this._container = L.DomUtil.create("div", "heightgraph")
@@ -112,43 +100,12 @@ import {
             this._svg = undefined;
         },
         /**
-         * add Data from geoJson and call all functions
+         * Add data form source an (re-)draws the actual graph
          * @param {Object} data
          */
         addData(data) {
             this._addData(data)
-        }, /**
-         * Internal function. Overloads public addData().
-         * Call with resize = true when resizing instead of actually adding data.
-         * TODO: this should be refactored to avoid calling addData on resize
-         * @param data
-         * @param resize
-         * @private
-         */
-        _addData(data) {
-	    return;
-            if (this._svg !== undefined) {
-                this._svg.selectAll("*")
-                    .remove();
-            }
-            if (!data || this.options.selectedAttributeIdx >= data.length) {
-                this.options.selectedAttributeIdx = 0;
-            }
-            this._removeMarkedSegmentsOnMap();
-            this._resetDrag(true);
-
-            this._data = data;
-            this._init_options();
-            this._prepareData();
-            this._calculateElevationBounds();
-            this._appendScales();
-            this._appendGrid();
-            if (Object.keys(data).length !== 0) {
-                this._createChart(this.options.selectedAttributeIdx);
-            }
-            this._createSelectionBox();
         },
-
 	/**
 	 * Sets the palette gradient.
 	 * Lifted from leaflet.hotline
@@ -158,7 +115,7 @@ import {
 	 * options.size will limit how colorful the result will be.
 	 * Hotline uses 256 but might be better to use a bit lese here.
 	 */
-	init_palette: function () {
+	initPalette: function () {
 		const palette = this.options.palette
 		let size = this.options.palette_size;
 		var canvas = document.createElement('canvas'),
@@ -196,16 +153,17 @@ import {
 
 		return `rgb(${palette[paletteIndex]},${palette[paletteIndex + 1]},${palette[paletteIndex + 2]})`;
 	},
-	/** new style drawing expect
-	 *  TODO: finalize data format away from ad-hoc solution!
-	 */
-	addData2(data, options) {
+	/**
+         * Internal function. Overloads public addData().
+         * Call with resize = true when resizing instead of actually adding data.
+         * TODO: this should be refactored to avoid calling addData on resize
+         * @param data
+         * @private
+         */
+	_addData(data) {
 	    if (this._svg !== undefined) {
                 this._svg.selectAll("*")
                     .remove();
-            }
-            if (!data || this.options.selectedAttributeIdx >= data.length) {
-                this.options.selectedAttributeIdx = 0;
             }
             this._removeMarkedSegmentsOnMap();
             this._resetDrag(true);
@@ -213,19 +171,17 @@ import {
 	    this._data = data;
             this._init_options();
 
-	    const drawData = this._prepareData2(data);
+	    const drawData = this._prepareData(data);
             this._appendScales();
             this._appendGrid();
-	    this._drawData2(data, drawData);
+	    this._drawData(data, drawData);
 
 	    this._dragRectangleG = this._svg.append("g");
 	    this._createFocus();
 	    this._appendBackground();
 	    this._createHorizontalLine();
-	    // TODO: convert to new format? Or drop!
-	    //this._createSelectionBox();
 	},
-	_prepareData2(data) {
+	_prepareData(data) {
 	    let maxAlt = 10, minAlt = 0;
 	    let minValue = Number.MAX_SAFE_INTEGER, maxValue = Number.MIN_SAFE_INTEGER;
 	    for(const point of data) {
@@ -283,7 +239,7 @@ import {
 
 	    return {altitudeRange, cumDistance, pathlist, colors};
 	},
-	_drawData2(data, prepared) {
+	_drawData(data, prepared) {
 	    const {altitudeRange, cumDistance, pathlist, colors} = prepared;
 	    this._areapath = this._svg.append('path')
 		.attr('class', 'area');
@@ -471,157 +427,6 @@ import {
             }
         },
         /**
-         * Removes the svg elements from the d3 chart
-         */
-        _removeChart() {
-            if (this._svg !== undefined) {
-                // remove areas
-                this._svg.selectAll("path.area")
-                    .remove();
-                // remove top border
-                this._svg.selectAll("path.border-top")
-                    .remove();
-                // remove horizontal Line
-                this._svg.selectAll(".lineSelection")
-                    .remove();
-                this._svg.selectAll(".horizontalLine")
-                    .remove();
-                this._svg.selectAll(".horizontalLineText")
-                    .remove();
-            }
-        },
-        /**
-         * Creates a random int between 0 and max
-         */
-        _randomNumber: max => Math.round((Math.random() * (max - 0))),
-        _d3ColorCategorical: [
-            schemeAccent,
-            schemeDark2,
-            schemeSet2,
-            schemeCategory10,
-            schemeSet3,
-            schemePaired
-        ], /**
-         * Prepares the data needed for the height graph
-         */
-        _prepareData() {
-	    // Notiz dient nur der min/max rechnung. Totale verschwendung im array?
-            this._elevations = [];
-	    // ist im grunde ein lokales array ...
-            this._cumulatedDistances = [];
-            this._cumulatedDistances.push(0);
-            this._categories = [];
-            const data = this._data
-            let colorScale
-            if (this._mappings === undefined) {
-                const randomNumber = this._randomNumber(this._d3ColorCategorical.length - 1)
-                colorScale = scaleOrdinal(this._d3ColorCategorical[randomNumber]);
-            }
-            for (let y = 0; y < data.length; y++) {
-                let cumDistance = 0
-                this._categories[y] = {
-                    info: {
-                        id: y,
-                        text: data[y].properties.label || data[y].properties.summary
-                    },
-                    distances: [],
-                    attributes: [],
-                    geometries: [],
-                };
-                let i, cnt = 0
-                const usedColors = {}
-                const isMappingFunction = this._mappings !== undefined && typeof this._mappings[data[y].properties.summary] === 'function';
-                for (i = 0; i < data[y].features.length; i++) {
-                    // data is redundant in every element of data which is why we collect it once
-                    let altitude, ptA, ptB, ptDistance
-                    const geometry = []
-                    const coordsLength = data[y].features[i].geometry.coordinates.length
-                    // save attribute types related to blocks
-                    const attributeType = data[y].features[i].properties.attributeType
-                    // check if mappings are defined, otherwise random colors
-                    let text, color
-                    if (this._mappings === undefined) {
-                        if (attributeType in usedColors) {
-                            text = attributeType;
-                            color = usedColors[attributeType];
-                        } else {
-                            text = attributeType;
-                            color = colorScale(i);
-                            usedColors[attributeType] = color;
-                        }
-                    } else {
-                        if (isMappingFunction) {
-                            const result = this._mappings[data[y].properties.summary](attributeType);
-                            text = result.text;
-                            color = result.color;
-                        } else {
-                            text = this._mappings[data[y].properties.summary][attributeType].text;
-                            color = this._mappings[data[y].properties.summary][attributeType].color;
-                        }
-                    }
-                    const attribute = {
-                        type: attributeType, text: text, color: color
-                    }
-                    this._categories[y].attributes.push(attribute);
-                    for (let j = 0; j < coordsLength; j++) {
-                        ptA = new L.LatLng(data[y].features[i].geometry.coordinates[j][1], data[y].features[i].geometry.coordinates[j][0]);
-                        altitude = data[y].features[i].geometry.coordinates[j][2];
-                        // add elevations, coordinates and point distances only once
-                        // last point in feature is first of next which is why we have to juggle with indices
-                        if (j < coordsLength - 1) {
-                            ptB = new L.LatLng(data[y].features[i].geometry.coordinates[j + 1][1], data[y].features[i].geometry.coordinates[j + 1][0]);
-                            ptDistance = ptA.distanceTo(ptB) / 1000;
-                            // calculate distances of specific block
-                            cumDistance += ptDistance;
-                            if (y === 0) {
-                                this._elevations.push(altitude);
-                                this._cumulatedDistances.push(cumDistance);
-                            }
-                            cnt += 1;
-                        } else if (j === coordsLength - 1 && i === data[y].features.length - 1) {
-                            if (y === 0) {
-                                this._elevations.push(altitude);
-                            }
-                            cnt += 1;
-                        }
-                        // save the position which corresponds to the distance along the route.
-                        let position
-                        if (j === coordsLength - 1 && i < data[y].features.length - 1) {
-                            position = this._cumulatedDistances[cnt];
-                        } else {
-                            position = this._cumulatedDistances[cnt - 1];
-                        }
-                        geometry.push({
-                            altitude: altitude,
-                            position: position,
-                            x: ptA.lng,
-                            y: ptA.lat,
-                            latlng: ptA,
-                            type: text,
-                            areaIdx: i
-                        });
-                    }
-                    this._categories[y].distances.push(cumDistance);
-                    this._categories[y].geometries.push(geometry);
-                }
-                if (y === data.length - 1) {
-                    this._totalDistance = cumDistance;
-                }
-            }
-        },
-        /**
-         * calculates minimum and maximum values for the elevation scale drawn with d3
-         */
-        _calculateElevationBounds() {
-            const max = d3Max(this._elevations) || 10
-            const min = d3Min(this._elevations) || 0
-            const range = max - min
-            this._elevationBounds = {
-                min: range < 10 ? min - 10 : min - 0.1 * range,
-                max: range < 10 ? max + 10 : max + 0.1 * range
-            }
-        },
-        /**
          * Creates a marker on the map while hovering
          * @param {Object} ll: actual coordinates of the route
          * @param {*} height: height as float or undefined text
@@ -680,23 +485,6 @@ import {
             selectAll('.bBox')
                 .attr("width", maxWidth + 10)
                 .attr("height", maxHeight);
-        },
-        /**
-         * Creates the elevation profile
-         */
-        _createChart(idx) {
-            let areas = this._categories.length === 0
-                ? []
-                : this._categories[idx].geometries;
-            this._areasFlattended = [].concat.apply([], areas);
-            for (let i = 0; i < areas.length; i++) {
-                this._appendAreas(areas[i], idx, i);
-            }
-	    this._dragRectangleG = this._svg.append("g");
-            this._createFocus();
-            this._appendBackground();
-            this._createBorderTopLine();
-            this._createHorizontalLine();
         },
         /**
          *  Creates focus Line and focus box while hovering
@@ -984,55 +772,6 @@ import {
         _defined(d) {
             return d && d.altitude !== undefined && d.altitude !== null;
         },
-        /**
-         * Appends the areas to the graph
-         */
-        _appendAreas(block, idx, eleIdx) {
-            const c = this._categories[idx].attributes[eleIdx].color
-            const self = this
-            const area = this._area = d3Area()
-                .x(d => {
-                    const xDiagonalCoordinate = self._x(d.position)
-                    d.xDiagonalCoordinate = xDiagonalCoordinate
-                    return xDiagonalCoordinate
-                })
-                .y0(this._svgHeight)
-                .y1(d => self._y(d.altitude))
-                .curve(curveLinear)
-                .defined(this._defined)
-            this._areapath = this._svg.append("path")
-                .attr("class", "area");
-            this._areapath.datum(block)
-                .attr("d", this._area)
-                .attr("stroke", c)
-                .styles(this._graphStyle)
-                .style("fill", c)
-                .style("pointer-events", "none");
-        },
-
-_appendAreas2(block, c) {
-            const self = this
-            const area = this._area = d3Area()
-                .x(d => {
-                    const xDiagonalCoordinate = self._x(d.position)
-                    d.xDiagonalCoordinate = xDiagonalCoordinate
-                    return xDiagonalCoordinate
-                })
-                .y0(this._svgHeight)
-                .y1(d => self._y(d.altitude))
-                .curve(curveLinear)
-                .defined(this._defined)
-            this._areapath = this._svg.append("path")
-                .attr("class", "area");
-            this._areapath.datum(block)
-                .attr("d", this._area)
-                .attr("stroke", c)
-                .styles(this._graphStyle)
-                .style("fill", c)
-                .style("pointer-events", "none");
-        },
-
-
         // grid lines in x axis function
         _make_x_axis() {
             return axisBottom()
@@ -1042,105 +781,6 @@ _appendAreas2(block, c) {
         _make_y_axis() {
             return axisLeft()
                 .scale(this._y);
-        },
-        /**
-         * Appends a selection box for different blocks
-         */
-        _createSelectionBox() {
-            const self = this
-            const svg = select(this._container).select("svg")
-            const width = this._width - this._margin.right,
-                height = this._height - this._margin.bottom
-            const verticalItemPosition = height + this._margin.bottom / 2 + 6
-            const jsonTriangles = [
-                {
-                    "x": width - 25,
-                    "y": verticalItemPosition + 3,
-                    "color": "#000",
-                    "type": symbolTriangle,
-                    "id": "leftArrowSelection",
-                    "angle": 0
-                }, {
-                    "x": width - 10,
-                    "y": verticalItemPosition,
-                    "color": "#000",
-                    "type": symbolTriangle,
-                    "id": "rightArrowSelection",
-                    "angle": 180
-                }
-            ]
-            // Use update pattern to update existing symbols in case of resize
-            let selectionSign = svg.selectAll(".select-symbol").data(jsonTriangles);
-            // remove any existing selection first
-            selectionSign.remove();
-            // select again
-            selectionSign = svg.selectAll(".select-symbol").data(jsonTriangles)
-            // then add only if needed
-            if (self._data.length > 1) {
-                selectionSign.enter().
-                    append("path").
-                    merge(selectionSign).
-                    attr("class", "select-symbol").
-                    attr("d", symbol().type(d => d.type)).
-                    attr("transform", d => "translate(" + d.x + "," + d.y + ") rotate(" + d.angle + ")").
-                    attr("id", d => d.id).style("fill", d => d.color).
-                    on("mousedown", d => {
-                        if (d.id === "rightArrowSelection") arrowRight()
-                        if (d.id === "leftArrowSelection") arrowLeft()
-                        // fake a drag event from cache values to keep selection
-                        self._gotDragged = true
-                        self._dragStartCoords = self._dragCache.start
-                        self._dragCurrentCoords = self._dragCache.end
-                    })
-            }
-            const chooseSelection = (id) => {
-                if (self._selectionText) self._selectionText.remove();
-                // after cleaning up, there is nothing left to do if there is no data
-                if (self._categories.length === 0) return;
-                const type = self._categories[id].info
-                if (typeof self.options.chooseSelectionCallback === "function") {
-                    self.options.chooseSelectionCallback(id, type);
-                }
-                const data = [
-                    {
-                        "selection": type.text
-                    }
-                ]
-                self._selectionText = svg.selectAll('selection_text')
-                    .data(data)
-                    .enter()
-                    .append('text')
-                    .attr("x", width - 35)
-                    .attr("y", verticalItemPosition + 4)
-                    .text(d => d.selection)
-                    .attr("class", "select-info")
-                    .attr("id", "selectionText")
-                    .attr("text-anchor", "end")
-            }
-
-            chooseSelection(this.options.selectedAttributeIdx);
-
-            let arrowRight = () => {
-                let idx = self.options.selectedAttributeIdx += 1
-                if (idx === self._categories.length) {
-                    self.options.selectedAttributeIdx = idx = 0
-                }
-                chooseSelection(idx)
-                self._removeChart()
-                self._removeMarkedSegmentsOnMap()
-                self._createChart(idx)
-            }
-
-            let arrowLeft = () => {
-                let idx = self.options.selectedAttributeIdx -= 1
-                if (idx === -1) {
-                    self.options.selectedAttributeIdx = idx = self._categories.length - 1
-                }
-                chooseSelection(idx)
-                self._removeChart()
-                self._removeMarkedSegmentsOnMap()
-                self._createChart(idx)
-            }
         },
 	/**
          * calculates the margins of boxes
@@ -1157,28 +797,6 @@ _appendAreas2(block, c) {
             }
             const maxWidth = d3Max(widths)
             return [cnt, maxWidth];
-        },
-        /**
-         * Creates top border line on graph
-	 * XXX no longer used in new design unclear whats the point in old design
-         */
-        _createBorderTopLine() {
-            const self = this
-            const data = this._areasFlattended
-            const borderTopLine = line()
-                .x(d => {
-                    const x = self._x
-                    return x(d.position)
-                })
-                .y(d => {
-                    const y = self._y
-                    return y(d.altitude)
-                })
-                .curve(curveBasis)
-                .defined(this._defined)
-            this._svg.append("svg:path")
-                .attr("d", borderTopLine(data))
-                .attr('class', 'border-top');
         },
         /*
          * Handles the mouseout event when the mouse leaves the background

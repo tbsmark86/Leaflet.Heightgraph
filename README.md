@@ -66,61 +66,10 @@ Data to the heightgraph object.
 ```javascript
 let hg = L.control.heightgraph();
 hg.addTo(map);
-hg.addData(geojson);
-L.geoJson(geojson).addTo(map);
+hg.addData(data);
 ```
-
 ## Supported data
-Input data has to be of type [GeoJSON-Format](http://geojson.org/).
-This must consist of feature collection(s) corresponding to a certain
-attribute which could be e.g. *surface* or *gradient* information.
-
-Each `FeatureCollection` comprises a certain `attribute` in its `properties`
-(e.g. `'summary': 'steepness'`) and has a list of `LineString` features.
-These should have `coordinates` including height values and the `attributeType`
-which corresponds to the certain type of attribute within this segment
-(in this case it could be an index of steepness) declared in its `properties`.
-
-Notice that the list of coordinates has to start with the last coordinate
-of the previous `LineString`.
-
-```javascript
-const FeatureCollections = [{
-    "type": "FeatureCollection",
-    "features": [{
-        "type": "Feature",
-        "geometry": {
-            "type": "LineString",
-            "coordinates": [
-                [8.6865264, 49.3859188, 114.5],
-                [8.6864108, 49.3868472, 114.3],
-                [8.6860538, 49.3903808, 114.8]
-            ]
-        },
-        "properties": {
-            "attributeType": "3"
-        }
-    }, {
-        "type": "Feature",
-        "geometry": {
-            "type": "LineString",
-            "coordinates": [
-                [8.6860538, 49.3903808, 114.8],
-                [8.6857921, 49.3936309, 114.4],
-                [8.6860124, 49.3936431, 114.3]
-            ]
-        },
-        "properties": {
-            "attributeType": "0"
-        }
-    }],
-    "properties": {
-        "Creator": "OpenRouteService.org",
-        "records": 2,
-        "summary": "Steepness"
-    }
-}];
-```
+Changed for brouter: Please see code
 
 ## Optional settings
 These additional options can be set to customize your heightgraph.

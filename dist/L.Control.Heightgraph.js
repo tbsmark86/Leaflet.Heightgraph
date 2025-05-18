@@ -882,7 +882,7 @@
     return current;
   }
 
-  function point$1(node, event) {
+  function point(node, event) {
     var svg = node.ownerSVGElement || node;
 
     if (svg.createSVGPoint) {
@@ -899,7 +899,7 @@
   function mouse(node) {
     var event = sourceEvent();
     if (event.changedTouches) event = event.changedTouches[0];
-    return point$1(node, event);
+    return point(node, event);
   }
 
   function selectAll(selector) {
@@ -913,7 +913,7 @@
 
     for (var i = 0, n = touches ? touches.length : 0, touch; i < n; ++i) {
       if ((touch = touches[i]).identifier === identifier) {
-        return point$1(node, touch);
+        return point(node, touch);
       }
     }
 
@@ -2866,28 +2866,6 @@
     return max;
   }
 
-  function d3Min(values, valueof) {
-    var n = values.length,
-        i = -1,
-        value,
-        min;
-
-    {
-      while (++i < n) { // Find the first comparable value.
-        if ((value = values[i]) != null && value >= value) {
-          min = value;
-          while (++i < n) { // Compare the remaining values.
-            if ((value = values[i]) != null && min > value) {
-              min = value;
-            }
-          }
-        }
-      }
-    }
-
-    return min;
-  }
-
   function initRange(domain, range) {
     switch (arguments.length) {
       case 0: break;
@@ -2995,48 +2973,6 @@
 
   var map$1 = array.map;
   var slice$1 = array.slice;
-
-  var implicit = {name: "implicit"};
-
-  function ordinal() {
-    var index = map$2(),
-        domain = [],
-        range = [],
-        unknown = implicit;
-
-    function scale(d) {
-      var key = d + "", i = index.get(key);
-      if (!i) {
-        if (unknown !== implicit) return unknown;
-        index.set(key, i = domain.push(d));
-      }
-      return range[(i - 1) % range.length];
-    }
-
-    scale.domain = function(_) {
-      if (!arguments.length) return domain.slice();
-      domain = [], index = map$2();
-      var i = -1, n = _.length, d, key;
-      while (++i < n) if (!index.has(key = (d = _[i]) + "")) index.set(key, domain.push(d));
-      return scale;
-    };
-
-    scale.range = function(_) {
-      return arguments.length ? (range = slice$1.call(_), scale) : range.slice();
-    };
-
-    scale.unknown = function(_) {
-      return arguments.length ? (unknown = _, scale) : unknown;
-    };
-
-    scale.copy = function() {
-      return ordinal(domain, range).unknown(unknown);
-    };
-
-    initRange.apply(scale, arguments);
-
-    return scale;
-  }
 
   function constant$2(x) {
     return function() {
@@ -4119,201 +4055,6 @@
   var pi = Math.PI;
   var tau = 2 * pi;
 
-  function Linear(context) {
-    this._context = context;
-  }
-
-  Linear.prototype = {
-    areaStart: function() {
-      this._line = 0;
-    },
-    areaEnd: function() {
-      this._line = NaN;
-    },
-    lineStart: function() {
-      this._point = 0;
-    },
-    lineEnd: function() {
-      if (this._line || (this._line !== 0 && this._point === 1)) this._context.closePath();
-      this._line = 1 - this._line;
-    },
-    point: function(x, y) {
-      x = +x, y = +y;
-      switch (this._point) {
-        case 0: this._point = 1; this._line ? this._context.lineTo(x, y) : this._context.moveTo(x, y); break;
-        case 1: this._point = 2; // proceed
-        default: this._context.lineTo(x, y); break;
-      }
-    }
-  };
-
-  function curveLinear(context) {
-    return new Linear(context);
-  }
-
-  function x(p) {
-    return p[0];
-  }
-
-  function y(p) {
-    return p[1];
-  }
-
-  function line() {
-    var x$1 = x,
-        y$1 = y,
-        defined = constant(true),
-        context = null,
-        curve = curveLinear,
-        output = null;
-
-    function line(data) {
-      var i,
-          n = data.length,
-          d,
-          defined0 = false,
-          buffer;
-
-      if (context == null) output = curve(buffer = path());
-
-      for (i = 0; i <= n; ++i) {
-        if (!(i < n && defined(d = data[i], i, data)) === defined0) {
-          if (defined0 = !defined0) output.lineStart();
-          else output.lineEnd();
-        }
-        if (defined0) output.point(+x$1(d, i, data), +y$1(d, i, data));
-      }
-
-      if (buffer) return output = null, buffer + "" || null;
-    }
-
-    line.x = function(_) {
-      return arguments.length ? (x$1 = typeof _ === "function" ? _ : constant(+_), line) : x$1;
-    };
-
-    line.y = function(_) {
-      return arguments.length ? (y$1 = typeof _ === "function" ? _ : constant(+_), line) : y$1;
-    };
-
-    line.defined = function(_) {
-      return arguments.length ? (defined = typeof _ === "function" ? _ : constant(!!_), line) : defined;
-    };
-
-    line.curve = function(_) {
-      return arguments.length ? (curve = _, context != null && (output = curve(context)), line) : curve;
-    };
-
-    line.context = function(_) {
-      return arguments.length ? (_ == null ? context = output = null : output = curve(context = _), line) : context;
-    };
-
-    return line;
-  }
-
-  function d3Area() {
-    var x0 = x,
-        x1 = null,
-        y0 = constant(0),
-        y1 = y,
-        defined = constant(true),
-        context = null,
-        curve = curveLinear,
-        output = null;
-
-    function area(data) {
-      var i,
-          j,
-          k,
-          n = data.length,
-          d,
-          defined0 = false,
-          buffer,
-          x0z = new Array(n),
-          y0z = new Array(n);
-
-      if (context == null) output = curve(buffer = path());
-
-      for (i = 0; i <= n; ++i) {
-        if (!(i < n && defined(d = data[i], i, data)) === defined0) {
-          if (defined0 = !defined0) {
-            j = i;
-            output.areaStart();
-            output.lineStart();
-          } else {
-            output.lineEnd();
-            output.lineStart();
-            for (k = i - 1; k >= j; --k) {
-              output.point(x0z[k], y0z[k]);
-            }
-            output.lineEnd();
-            output.areaEnd();
-          }
-        }
-        if (defined0) {
-          x0z[i] = +x0(d, i, data), y0z[i] = +y0(d, i, data);
-          output.point(x1 ? +x1(d, i, data) : x0z[i], y1 ? +y1(d, i, data) : y0z[i]);
-        }
-      }
-
-      if (buffer) return output = null, buffer + "" || null;
-    }
-
-    function arealine() {
-      return line().defined(defined).curve(curve).context(context);
-    }
-
-    area.x = function(_) {
-      return arguments.length ? (x0 = typeof _ === "function" ? _ : constant(+_), x1 = null, area) : x0;
-    };
-
-    area.x0 = function(_) {
-      return arguments.length ? (x0 = typeof _ === "function" ? _ : constant(+_), area) : x0;
-    };
-
-    area.x1 = function(_) {
-      return arguments.length ? (x1 = _ == null ? null : typeof _ === "function" ? _ : constant(+_), area) : x1;
-    };
-
-    area.y = function(_) {
-      return arguments.length ? (y0 = typeof _ === "function" ? _ : constant(+_), y1 = null, area) : y0;
-    };
-
-    area.y0 = function(_) {
-      return arguments.length ? (y0 = typeof _ === "function" ? _ : constant(+_), area) : y0;
-    };
-
-    area.y1 = function(_) {
-      return arguments.length ? (y1 = _ == null ? null : typeof _ === "function" ? _ : constant(+_), area) : y1;
-    };
-
-    area.lineX0 =
-    area.lineY0 = function() {
-      return arealine().x(x0).y(y0);
-    };
-
-    area.lineY1 = function() {
-      return arealine().x(x0).y(y1);
-    };
-
-    area.lineX1 = function() {
-      return arealine().x(x1).y(y0);
-    };
-
-    area.defined = function(_) {
-      return arguments.length ? (defined = typeof _ === "function" ? _ : constant(!!_), area) : defined;
-    };
-
-    area.curve = function(_) {
-      return arguments.length ? (curve = _, context != null && (output = curve(context)), area) : curve;
-    };
-
-    area.context = function(_) {
-      return arguments.length ? (_ == null ? context = output = null : output = curve(context = _), area) : context;
-    };
-
-    return area;
-  }
-
   var circle = {
     draw: function(context, size) {
       var r = Math.sqrt(size / pi);
@@ -4361,76 +4102,6 @@
     return symbol;
   }
 
-  function point(that, x, y) {
-    that._context.bezierCurveTo(
-      (2 * that._x0 + that._x1) / 3,
-      (2 * that._y0 + that._y1) / 3,
-      (that._x0 + 2 * that._x1) / 3,
-      (that._y0 + 2 * that._y1) / 3,
-      (that._x0 + 4 * that._x1 + x) / 6,
-      (that._y0 + 4 * that._y1 + y) / 6
-    );
-  }
-
-  function Basis(context) {
-    this._context = context;
-  }
-
-  Basis.prototype = {
-    areaStart: function() {
-      this._line = 0;
-    },
-    areaEnd: function() {
-      this._line = NaN;
-    },
-    lineStart: function() {
-      this._x0 = this._x1 =
-      this._y0 = this._y1 = NaN;
-      this._point = 0;
-    },
-    lineEnd: function() {
-      switch (this._point) {
-        case 3: point(this, this._x1, this._y1); // proceed
-        case 2: this._context.lineTo(this._x1, this._y1); break;
-      }
-      if (this._line || (this._line !== 0 && this._point === 1)) this._context.closePath();
-      this._line = 1 - this._line;
-    },
-    point: function(x, y) {
-      x = +x, y = +y;
-      switch (this._point) {
-        case 0: this._point = 1; this._line ? this._context.lineTo(x, y) : this._context.moveTo(x, y); break;
-        case 1: this._point = 2; break;
-        case 2: this._point = 3; this._context.lineTo((5 * this._x0 + this._x1) / 6, (5 * this._y0 + this._y1) / 6); // proceed
-        default: point(this, x, y); break;
-      }
-      this._x0 = this._x1, this._x1 = x;
-      this._y0 = this._y1, this._y1 = y;
-    }
-  };
-
-  function curveBasis(context) {
-    return new Basis(context);
-  }
-
-  function colors(specifier) {
-    var n = specifier.length / 6 | 0, colors = new Array(n), i = 0;
-    while (i < n) colors[i] = "#" + specifier.slice(i * 6, ++i * 6);
-    return colors;
-  }
-
-  var schemeCategory10 = colors("1f77b4ff7f0e2ca02cd627289467bd8c564be377c27f7f7fbcbd2217becf");
-
-  var schemeAccent = colors("7fc97fbeaed4fdc086ffff99386cb0f0027fbf5b17666666");
-
-  var schemeDark2 = colors("1b9e77d95f027570b3e7298a66a61ee6ab02a6761d666666");
-
-  var schemePaired = colors("a6cee31f78b4b2df8a33a02cfb9a99e31a1cfdbf6fff7f00cab2d66a3d9affff99b15928");
-
-  var schemeSet2 = colors("66c2a5fc8d628da0cbe78ac3a6d854ffd92fe5c494b3b3b3");
-
-  var schemeSet3 = colors("8dd3c7ffffb3bebadafb807280b1d3fdb462b3de69fccde5d9d9d9bc80bdccebc5ffed6f");
-
   (function (factory, window) {
 
       // define an AMD module that relies on 'leaflet'
@@ -4462,13 +4133,10 @@
                   bottom: 55,
                   left: 50
               },
-              mappings: undefined,
               expand: true,
               expandControls: true,
               translation: {},
               expandCallback: undefined,
-              chooseSelectionCallback: undefined,
-              selectedAttributeIdx: 0,
               xTicks: undefined,
               yTicks: undefined,
               highlightStyle: undefined,
@@ -4496,13 +4164,12 @@
               this._margin = this.options.margins;
               this._width = this.options.width;
               this._height = this.options.height;
-              this._mappings = this.options.mappings;
               this._svgWidth = this._width - this._margin.left - this._margin.right;
               this._svgHeight = this._height - this._margin.top - this._margin.bottom;
               this._highlightStyle = this.options.highlightStyle || { color: 'red' };
               this._graphStyle = this.options.graphStyle || {};
               this._dragCache = {};
-  	    this.init_palette();
+  	    this.initPalette();
           },
           onAdd(map) {
               let container = this._container = L.DomUtil.create("div", "heightgraph");
@@ -4529,23 +4196,12 @@
               this._svg = undefined;
           },
           /**
-           * add Data from geoJson and call all functions
+           * Add data form source an (re-)draws the actual graph
            * @param {Object} data
            */
           addData(data) {
               this._addData(data);
-          }, /**
-           * Internal function. Overloads public addData().
-           * Call with resize = true when resizing instead of actually adding data.
-           * TODO: this should be refactored to avoid calling addData on resize
-           * @param data
-           * @param resize
-           * @private
-           */
-          _addData(data) {
-  	    return;
           },
-
   	/**
   	 * Sets the palette gradient.
   	 * Lifted from leaflet.hotline
@@ -4555,7 +4211,7 @@
   	 * options.size will limit how colorful the result will be.
   	 * Hotline uses 256 but might be better to use a bit lese here.
   	 */
-  	init_palette: function () {
+  	initPalette: function () {
   		const palette = this.options.palette;
   		let size = this.options.palette_size;
   		var canvas = document.createElement('canvas'),
@@ -4593,16 +4249,17 @@
 
   		return `rgb(${palette[paletteIndex]},${palette[paletteIndex + 1]},${palette[paletteIndex + 2]})`;
   	},
-  	/** new style drawing expect
-  	 *  TODO: finalize data format away from ad-hoc solution!
-  	 */
-  	addData2(data, options) {
+  	/**
+           * Internal function. Overloads public addData().
+           * Call with resize = true when resizing instead of actually adding data.
+           * TODO: this should be refactored to avoid calling addData on resize
+           * @param data
+           * @private
+           */
+  	_addData(data) {
   	    if (this._svg !== undefined) {
                   this._svg.selectAll("*")
                       .remove();
-              }
-              if (!data || this.options.selectedAttributeIdx >= data.length) {
-                  this.options.selectedAttributeIdx = 0;
               }
               this._removeMarkedSegmentsOnMap();
               this._resetDrag(true);
@@ -4610,19 +4267,17 @@
   	    this._data = data;
               this._init_options();
 
-  	    const drawData = this._prepareData2(data);
+  	    const drawData = this._prepareData(data);
               this._appendScales();
               this._appendGrid();
-  	    this._drawData2(data, drawData);
+  	    this._drawData(data, drawData);
 
   	    this._dragRectangleG = this._svg.append("g");
   	    this._createFocus();
   	    this._appendBackground();
   	    this._createHorizontalLine();
-  	    // TODO: convert to new format? Or drop!
-  	    //this._createSelectionBox();
   	},
-  	_prepareData2(data) {
+  	_prepareData(data) {
   	    let maxAlt = 10, minAlt = 0;
   	    let minValue = Number.MAX_SAFE_INTEGER, maxValue = Number.MIN_SAFE_INTEGER;
   	    for(const point of data) {
@@ -4680,7 +4335,7 @@
 
   	    return {altitudeRange, cumDistance, pathlist, colors};
   	},
-  	_drawData2(data, prepared) {
+  	_drawData(data, prepared) {
   	    const {altitudeRange, cumDistance, pathlist, colors} = prepared;
   	    this._areapath = this._svg.append('path')
   		.attr('class', 'area');
@@ -4868,157 +4523,6 @@
               }
           },
           /**
-           * Removes the svg elements from the d3 chart
-           */
-          _removeChart() {
-              if (this._svg !== undefined) {
-                  // remove areas
-                  this._svg.selectAll("path.area")
-                      .remove();
-                  // remove top border
-                  this._svg.selectAll("path.border-top")
-                      .remove();
-                  // remove horizontal Line
-                  this._svg.selectAll(".lineSelection")
-                      .remove();
-                  this._svg.selectAll(".horizontalLine")
-                      .remove();
-                  this._svg.selectAll(".horizontalLineText")
-                      .remove();
-              }
-          },
-          /**
-           * Creates a random int between 0 and max
-           */
-          _randomNumber: max => Math.round((Math.random() * (max - 0))),
-          _d3ColorCategorical: [
-              schemeAccent,
-              schemeDark2,
-              schemeSet2,
-              schemeCategory10,
-              schemeSet3,
-              schemePaired
-          ], /**
-           * Prepares the data needed for the height graph
-           */
-          _prepareData() {
-  	    // Notiz dient nur der min/max rechnung. Totale verschwendung im array?
-              this._elevations = [];
-  	    // ist im grunde ein lokales array ...
-              this._cumulatedDistances = [];
-              this._cumulatedDistances.push(0);
-              this._categories = [];
-              const data = this._data;
-              let colorScale;
-              if (this._mappings === undefined) {
-                  const randomNumber = this._randomNumber(this._d3ColorCategorical.length - 1);
-                  colorScale = ordinal(this._d3ColorCategorical[randomNumber]);
-              }
-              for (let y = 0; y < data.length; y++) {
-                  let cumDistance = 0;
-                  this._categories[y] = {
-                      info: {
-                          id: y,
-                          text: data[y].properties.label || data[y].properties.summary
-                      },
-                      distances: [],
-                      attributes: [],
-                      geometries: [],
-                  };
-                  let i, cnt = 0;
-                  const usedColors = {};
-                  const isMappingFunction = this._mappings !== undefined && typeof this._mappings[data[y].properties.summary] === 'function';
-                  for (i = 0; i < data[y].features.length; i++) {
-                      // data is redundant in every element of data which is why we collect it once
-                      let altitude, ptA, ptB, ptDistance;
-                      const geometry = [];
-                      const coordsLength = data[y].features[i].geometry.coordinates.length;
-                      // save attribute types related to blocks
-                      const attributeType = data[y].features[i].properties.attributeType;
-                      // check if mappings are defined, otherwise random colors
-                      let text, color;
-                      if (this._mappings === undefined) {
-                          if (attributeType in usedColors) {
-                              text = attributeType;
-                              color = usedColors[attributeType];
-                          } else {
-                              text = attributeType;
-                              color = colorScale(i);
-                              usedColors[attributeType] = color;
-                          }
-                      } else {
-                          if (isMappingFunction) {
-                              const result = this._mappings[data[y].properties.summary](attributeType);
-                              text = result.text;
-                              color = result.color;
-                          } else {
-                              text = this._mappings[data[y].properties.summary][attributeType].text;
-                              color = this._mappings[data[y].properties.summary][attributeType].color;
-                          }
-                      }
-                      const attribute = {
-                          type: attributeType, text: text, color: color
-                      };
-                      this._categories[y].attributes.push(attribute);
-                      for (let j = 0; j < coordsLength; j++) {
-                          ptA = new L.LatLng(data[y].features[i].geometry.coordinates[j][1], data[y].features[i].geometry.coordinates[j][0]);
-                          altitude = data[y].features[i].geometry.coordinates[j][2];
-                          // add elevations, coordinates and point distances only once
-                          // last point in feature is first of next which is why we have to juggle with indices
-                          if (j < coordsLength - 1) {
-                              ptB = new L.LatLng(data[y].features[i].geometry.coordinates[j + 1][1], data[y].features[i].geometry.coordinates[j + 1][0]);
-                              ptDistance = ptA.distanceTo(ptB) / 1000;
-                              // calculate distances of specific block
-                              cumDistance += ptDistance;
-                              if (y === 0) {
-                                  this._elevations.push(altitude);
-                                  this._cumulatedDistances.push(cumDistance);
-                              }
-                              cnt += 1;
-                          } else if (j === coordsLength - 1 && i === data[y].features.length - 1) {
-                              if (y === 0) {
-                                  this._elevations.push(altitude);
-                              }
-                              cnt += 1;
-                          }
-                          // save the position which corresponds to the distance along the route.
-                          let position;
-                          if (j === coordsLength - 1 && i < data[y].features.length - 1) {
-                              position = this._cumulatedDistances[cnt];
-                          } else {
-                              position = this._cumulatedDistances[cnt - 1];
-                          }
-                          geometry.push({
-                              altitude: altitude,
-                              position: position,
-                              x: ptA.lng,
-                              y: ptA.lat,
-                              latlng: ptA,
-                              type: text,
-                              areaIdx: i
-                          });
-                      }
-                      this._categories[y].distances.push(cumDistance);
-                      this._categories[y].geometries.push(geometry);
-                  }
-                  if (y === data.length - 1) {
-                      this._totalDistance = cumDistance;
-                  }
-              }
-          },
-          /**
-           * calculates minimum and maximum values for the elevation scale drawn with d3
-           */
-          _calculateElevationBounds() {
-              const max = d3Max(this._elevations) || 10;
-              const min = d3Min(this._elevations) || 0;
-              const range = max - min;
-              this._elevationBounds = {
-                  min: range < 10 ? min - 10 : min - 0.1 * range,
-                  max: range < 10 ? max + 10 : max + 0.1 * range
-              };
-          },
-          /**
            * Creates a marker on the map while hovering
            * @param {Object} ll: actual coordinates of the route
            * @param {*} height: height as float or undefined text
@@ -5077,23 +4581,6 @@
               selectAll('.bBox')
                   .attr("width", maxWidth + 10)
                   .attr("height", maxHeight);
-          },
-          /**
-           * Creates the elevation profile
-           */
-          _createChart(idx) {
-              let areas = this._categories.length === 0
-                  ? []
-                  : this._categories[idx].geometries;
-              this._areasFlattended = [].concat.apply([], areas);
-              for (let i = 0; i < areas.length; i++) {
-                  this._appendAreas(areas[i], idx, i);
-              }
-  	    this._dragRectangleG = this._svg.append("g");
-              this._createFocus();
-              this._appendBackground();
-              this._createBorderTopLine();
-              this._createHorizontalLine();
           },
           /**
            *  Creates focus Line and focus box while hovering
@@ -5381,55 +4868,6 @@
           _defined(d) {
               return d && d.altitude !== undefined && d.altitude !== null;
           },
-          /**
-           * Appends the areas to the graph
-           */
-          _appendAreas(block, idx, eleIdx) {
-              const c = this._categories[idx].attributes[eleIdx].color;
-              const self = this;
-              this._area = d3Area()
-                  .x(d => {
-                      const xDiagonalCoordinate = self._x(d.position);
-                      d.xDiagonalCoordinate = xDiagonalCoordinate;
-                      return xDiagonalCoordinate
-                  })
-                  .y0(this._svgHeight)
-                  .y1(d => self._y(d.altitude))
-                  .curve(curveLinear)
-                  .defined(this._defined);
-              this._areapath = this._svg.append("path")
-                  .attr("class", "area");
-              this._areapath.datum(block)
-                  .attr("d", this._area)
-                  .attr("stroke", c)
-                  .styles(this._graphStyle)
-                  .style("fill", c)
-                  .style("pointer-events", "none");
-          },
-
-  _appendAreas2(block, c) {
-              const self = this;
-              this._area = d3Area()
-                  .x(d => {
-                      const xDiagonalCoordinate = self._x(d.position);
-                      d.xDiagonalCoordinate = xDiagonalCoordinate;
-                      return xDiagonalCoordinate
-                  })
-                  .y0(this._svgHeight)
-                  .y1(d => self._y(d.altitude))
-                  .curve(curveLinear)
-                  .defined(this._defined);
-              this._areapath = this._svg.append("path")
-                  .attr("class", "area");
-              this._areapath.datum(block)
-                  .attr("d", this._area)
-                  .attr("stroke", c)
-                  .styles(this._graphStyle)
-                  .style("fill", c)
-                  .style("pointer-events", "none");
-          },
-
-
           // grid lines in x axis function
           _make_x_axis() {
               return axisBottom()
@@ -5439,105 +4877,6 @@
           _make_y_axis() {
               return axisLeft()
                   .scale(this._y);
-          },
-          /**
-           * Appends a selection box for different blocks
-           */
-          _createSelectionBox() {
-              const self = this;
-              const svg = select(this._container).select("svg");
-              const width = this._width - this._margin.right,
-                  height = this._height - this._margin.bottom;
-              const verticalItemPosition = height + this._margin.bottom / 2 + 6;
-              const jsonTriangles = [
-                  {
-                      "x": width - 25,
-                      "y": verticalItemPosition + 3,
-                      "color": "#000",
-                      "type": symbolTriangle,
-                      "id": "leftArrowSelection",
-                      "angle": 0
-                  }, {
-                      "x": width - 10,
-                      "y": verticalItemPosition,
-                      "color": "#000",
-                      "type": symbolTriangle,
-                      "id": "rightArrowSelection",
-                      "angle": 180
-                  }
-              ];
-              // Use update pattern to update existing symbols in case of resize
-              let selectionSign = svg.selectAll(".select-symbol").data(jsonTriangles);
-              // remove any existing selection first
-              selectionSign.remove();
-              // select again
-              selectionSign = svg.selectAll(".select-symbol").data(jsonTriangles);
-              // then add only if needed
-              if (self._data.length > 1) {
-                  selectionSign.enter().
-                      append("path").
-                      merge(selectionSign).
-                      attr("class", "select-symbol").
-                      attr("d", symbol().type(d => d.type)).
-                      attr("transform", d => "translate(" + d.x + "," + d.y + ") rotate(" + d.angle + ")").
-                      attr("id", d => d.id).style("fill", d => d.color).
-                      on("mousedown", d => {
-                          if (d.id === "rightArrowSelection") arrowRight();
-                          if (d.id === "leftArrowSelection") arrowLeft();
-                          // fake a drag event from cache values to keep selection
-                          self._gotDragged = true;
-                          self._dragStartCoords = self._dragCache.start;
-                          self._dragCurrentCoords = self._dragCache.end;
-                      });
-              }
-              const chooseSelection = (id) => {
-                  if (self._selectionText) self._selectionText.remove();
-                  // after cleaning up, there is nothing left to do if there is no data
-                  if (self._categories.length === 0) return;
-                  const type = self._categories[id].info;
-                  if (typeof self.options.chooseSelectionCallback === "function") {
-                      self.options.chooseSelectionCallback(id, type);
-                  }
-                  const data = [
-                      {
-                          "selection": type.text
-                      }
-                  ];
-                  self._selectionText = svg.selectAll('selection_text')
-                      .data(data)
-                      .enter()
-                      .append('text')
-                      .attr("x", width - 35)
-                      .attr("y", verticalItemPosition + 4)
-                      .text(d => d.selection)
-                      .attr("class", "select-info")
-                      .attr("id", "selectionText")
-                      .attr("text-anchor", "end");
-              };
-
-              chooseSelection(this.options.selectedAttributeIdx);
-
-              let arrowRight = () => {
-                  let idx = self.options.selectedAttributeIdx += 1;
-                  if (idx === self._categories.length) {
-                      self.options.selectedAttributeIdx = idx = 0;
-                  }
-                  chooseSelection(idx);
-                  self._removeChart();
-                  self._removeMarkedSegmentsOnMap();
-                  self._createChart(idx);
-              };
-
-              let arrowLeft = () => {
-                  let idx = self.options.selectedAttributeIdx -= 1;
-                  if (idx === -1) {
-                      self.options.selectedAttributeIdx = idx = self._categories.length - 1;
-                  }
-                  chooseSelection(idx);
-                  self._removeChart();
-                  self._removeMarkedSegmentsOnMap();
-                  self._createChart(idx);
-              };
           },
   	/**
            * calculates the margins of boxes
@@ -5554,28 +4893,6 @@
               }
               const maxWidth = d3Max(widths);
               return [cnt, maxWidth];
-          },
-          /**
-           * Creates top border line on graph
-  	 * XXX no longer used in new design unclear whats the point in old design
-           */
-          _createBorderTopLine() {
-              const self = this;
-              const data = this._areasFlattended;
-              const borderTopLine = line()
-                  .x(d => {
-                      const x = self._x;
-                      return x(d.position)
-                  })
-                  .y(d => {
-                      const y = self._y;
-                      return y(d.altitude)
-                  })
-                  .curve(curveBasis)
-                  .defined(this._defined);
-              this._svg.append("svg:path")
-                  .attr("d", borderTopLine(data))
-                  .attr('class', 'border-top');
           },
           /*
            * Handles the mouseout event when the mouse leaves the background
