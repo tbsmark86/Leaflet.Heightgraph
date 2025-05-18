@@ -4472,7 +4472,15 @@
               xTicks: undefined,
               yTicks: undefined,
               highlightStyle: undefined,
-              graphStyle: undefined
+              graphStyle: undefined,
+  	    palette: {
+  		    0.0: 'green',
+  		    0.5: 'yellow',
+  		    1.0: 'red'
+  	    },
+  	    palette_size: 30,
+  	    palette_minValue: undefined,
+  	    palette_maxValue: undefined,
           },
           _defaultTranslation: {
               distance: "Distance",
@@ -4494,6 +4502,7 @@
               this._highlightStyle = this.options.highlightStyle || { color: 'red' };
               this._graphStyle = this.options.graphStyle || {};
               this._dragCache = {};
+  	    this.init_palette();
           },
           onAdd(map) {
               let container = this._container = L.DomUtil.create("div", "heightgraph");
@@ -4546,13 +4555,9 @@
   	 * options.size will limit how colorful the result will be.
   	 * Hotline uses 256 but might be better to use a bit lese here.
   	 */
-  	palette: function (options) {
-  		const palette = options.palette || {
-  			0.0: 'green',
-  			0.5: 'yellow',
-  			1.0: 'red'
-  		};
-  		let size = options.palette_count || 30;
+  	init_palette: function () {
+  		const palette = this.options.palette;
+  		let size = this.options.palette_size;
   		var canvas = document.createElement('canvas'),
   				ctx = canvas.getContext('2d'),
   				gradient = ctx.createLinearGradient(0, 0, 0, size);
@@ -4568,8 +4573,9 @@
   		ctx.fillRect(0, 0, 1, size);
 
   		this._palette = ctx.getImageData(0, 0, 1, size).data;
-  		this._palette.min = options.min;
-  		this._palette.max = options.max;
+  		// If missing prepareData() will fill these from the actual values
+  		this._palette.min = this.options.palette_minValue;
+  		this._palette.max = this.options.palette_maxValue;
   		this._palette.size = size;
 
   		return this;
@@ -4603,11 +4609,6 @@
 
   	    this._data = data;
               this._init_options();
-  	    // TODO: Palette currently requires min/max option make those optional
-  	    // by calculating them on-demand
-  	    // TODO merge into init_options and integrate new style options into
-  	    // old ones
-  	    this.palette(options);
 
   	    const drawData = this._prepareData2(data);
               this._appendScales();
@@ -4623,9 +4624,18 @@
   	},
   	_prepareData2(data) {
   	    let maxAlt = 10, minAlt = 0;
+  	    let minValue = Number.MAX_SAFE_INTEGER, maxValue = Number.MIN_SAFE_INTEGER;
   	    for(const point of data) {
   		maxAlt = Math.max(maxAlt, point.latLng.alt);
   		minAlt = Math.min(minAlt, point.latLng.alt);
+  		maxValue = Math.max(maxValue, point[2]);
+  		minValue = Math.min(minValue, point[2]);
+  	    }
+  	    if(this._palette.min === undefined) {
+  		this._palette.min = minValue;
+  	    }
+  	    if(this._palette.max === undefined) {
+  		this._palette.max = maxValue;
   	    }
   	    let altitudeRange = maxAlt - minAlt;
               this._elevationBounds = {
@@ -4643,11 +4653,15 @@
   	    let colors = [];
   	    let lastColor = null;
   	    for(const point of data) {
-  		let curLatLg = new L.LatLng(point[1], point[0]);
+  		let curLatLg = new L.LatLng(point[0], point[1]);
+  		point.latlng = curLatLg;
+  		point.altitude = point.latLng.alt; // XXX note the almost duplicate name
+  				//  at the moment, need to make data format more clear!!!
   		if(lastPoint != null) {
   		    cumDistance += lastPoint.distanceTo(curLatLg);
   		    lastPoint = curLatLg;
   		}
+  		point.position = cumDistance / 1000;
   		lastPoint = curLatLg;
 
   		// Because svg will translate/transform everything anyway why bother
@@ -4767,7 +4781,7 @@
                   if (skipMapFitBounds !== true) {
                       // potential performance improvement:
                       // we could cache the full extend when addData() is called
-                      let fullExtent = this._calculateFullExtent(this._areasFlattended);
+                      let fullExtent = this._calculateFullExtent(this._data);
                       if (fullExtent) this._map.fitBounds(fullExtent);
   	            this._focusHideSelection();
                   }
@@ -4817,9 +4831,9 @@
               const start = Math.min(index1, index2), end = Math.max(index1, index2);
               let ext;
               if (start !== end) {
-                  ext = this._calculateFullExtent(this._areasFlattended.slice(start, end + 1));
-              } else if (this._areasFlattended.length > 0) {
-                  ext = [this._areasFlattended[start].latlng, this._areasFlattended[end].latlng];
+                  ext = this._calculateFullExtent(this._data.slice(start, end + 1));
+              } else if (this._data.length > 0) {
+                  ext = [this._data[start].latlng, this._data[end].latlng];
               }
               if (ext) this._map.fitBounds(ext);
           },
@@ -5590,7 +5604,7 @@
            * the closest to the given latlng on the provided event, it could be slow.
            */
           mapMousemoveHandler(event, { showMapMarker: showMapMarker = true } = {}) {
-              if (this._areasFlattended === false) {
+              if (!this._data.length) {
                   return;
               }
               // initialize the vars for the closest item calculation
@@ -5603,7 +5617,8 @@
               const exactMatchRounding = 1.1 / 111111;
               // In order to ease cumulated calculations, we pass the index as well as the item
               // to the mouse handler.
-              for (let [ix, item] of this._areasFlattended.entries()) {
+  	    var ix = 0; 
+              for (const item of this._data) {
                   let latDiff = event.latlng.lat - item.latlng.lat;
                   let lngDiff = event.latlng.lng - item.latlng.lng;
                   // first check for an almost exact match; it's simple and avoid further calculations
@@ -5619,6 +5634,7 @@
                       closestItemIx = ix;
                       closestDistance = distance;
                   }
+  		ix++;
               }
 
               if (closestItem) this._internalMousemoveHandler(closestItem, closestItemIx, showMapMarker);
@@ -5627,22 +5643,20 @@
            * Handles the mouseover the chart and displays distance and altitude level
            */
           _mousemoveHandler(d, i, ctx) {
-  	    // XXX not working in new format
-  	    return;
+              const coords = mouse(this._svg.node());
+              const ix = this._findItemForX(coords[0]);
+              const item = this._data[ix];
+              if (item) this._internalMousemoveHandler(item, ix);
           },
           /*
            * Handles the mouseover, given the current item the mouse is over
            */
           _internalMousemoveHandler(item, ix, showMapMarker = true) {
-              let areaLength;
-              const alt = this._defined(item) ? item.altitude : '-', dist = item.position,
-                  ll = item.latlng, areaIdx = item.areaIdx, type = item.type;
+              const alt = this._defined(item) ? item.altitude : '-', 
+  		dist = item.position,
+                  ll = item.latlng;
+  	    const type = item.value_text;
               const boxWidth = this._dynamicBoxSize(".focusbox text")[1] + 10;
-              if (areaIdx === 0) {
-                  areaLength = this._categories[this.options.selectedAttributeIdx].distances[areaIdx];
-              } else {
-                  areaLength = this._categories[this.options.selectedAttributeIdx].distances[areaIdx] - this._categories[this.options.selectedAttributeIdx].distances[areaIdx - 1];
-              }
               if (showMapMarker) {
                   this._showMapMarker(ll, alt, type);
               }
@@ -5664,7 +5678,7 @@
               }
               this._distTspan.text(" " + dist.toFixed(1) + ' km');
               this._altTspan.text(" " + alt + ' m');
-              this._areaTspan.text(" " + areaLength.toFixed(1) + ' km');
+              this._areaTspan.text(` ${this._getLengthSameValue(ix).toFixed(1)} km`);
               this._typeTspan.text(" " + type);
               this._focusRect.attr("width", boxWidth);
               this._focusLine.style("display", "block")
@@ -5698,7 +5712,7 @@
              // Cumulated distance for the short segment
              let delta_dst = 0.0;
              for (let ix = Math.min(ix1, ix2); ix <= Math.max(ix1, ix2); ix++) {
-               let item = this._areasFlattended[ix];
+               let item = this._data[ix];
                if (!prev){
                  prev = item;
                  continue;
@@ -5735,13 +5749,27 @@
              this._prev_cumulation = [Math.abs(ix1-ix2), Date.now(), vals];
              return vals;
           },
+  	/* Looking at some index pos into the data sum up the length with
+  	 * the same value e.g. length with same incline and therefore color */
+  	_getLengthSameValue(pos) {
+  	    const item = this._data[pos];
+  	    let start = item.position, end = item.position;
+  	    const val = item[2];
+  	    for(let i = pos; i >= 0 && this._data[i][2] === val; i--) {
+  		start = this._data[i].position;
+  	    }
+  	    for(let i = pos; i < this._data.length && this._data[i][2] === val; i++) {
+  		end = this._data[i].position;
+  	    }
+  	    return end - start;
+  	},
           /*
            * Finds a data entry for a given x-coordinate of the diagram
            */
           _findItemForX(x) {
               const bisect = bisector(d => d.position).left;
               const xInvert = this._x.invert(x);
-              return bisect(this._areasFlattended, xInvert);
+              return bisect(this._data, xInvert);
           },
           /*
            * Finds data entries above a given y-elevation value and returns geo-coordinates
@@ -5775,7 +5803,7 @@
               };
 
               const yInvert = this._y.invert(y);
-              return bisect(this._areasFlattended, yInvert);
+              return bisect(this._data, yInvert);
           },
           /*
            * Checks the user passed translations, if they don't exist, fallback to the default translations
