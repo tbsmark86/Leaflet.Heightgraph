@@ -53,6 +53,7 @@ import { symbol, symbolTriangle } from 'd3-shape'
 	    palette_size: 30,
 	    palette_minValue: undefined,
 	    palette_maxValue: undefined,
+	    value2text: (val) => {return val;}
         },
         _defaultTranslation: {
             distance: "Distance",
@@ -101,10 +102,13 @@ import { symbol, symbolTriangle } from 'd3-shape'
         },
         /**
          * Add data form source an (re-)draws the actual graph
-         * @param {Object} data
+         * @param {Array<LatLng>} data array of L.latLng objects with extra
+	 *	_value to specify the color
+	 *	The values _will_ be modified by the lib to contain additional
+	 *	helper values.
          */
         addData(data) {
-            this._addData(data)
+            this._addData(data);
         },
 	/**
 	 * Sets the palette gradient.
@@ -185,10 +189,10 @@ import { symbol, symbolTriangle } from 'd3-shape'
 	    let maxAlt = 10, minAlt = 0;
 	    let minValue = Number.MAX_SAFE_INTEGER, maxValue = Number.MIN_SAFE_INTEGER;
 	    for(const point of data) {
-		maxAlt = Math.max(maxAlt, point.latLng.alt);
-		minAlt = Math.min(minAlt, point.latLng.alt);
-		maxValue = Math.max(maxValue, point[2]);
-		minValue = Math.min(minValue, point[2]);
+		maxAlt = Math.max(maxAlt, point.alt);
+		minAlt = Math.min(minAlt, point.alt);
+		maxValue = Math.max(maxValue, point._value);
+		minValue = Math.min(minValue, point._value);
 	    }
 	    if(this._palette.min === undefined) {
 		this._palette.min = minValue;
@@ -212,24 +216,19 @@ import { symbol, symbolTriangle } from 'd3-shape'
 	    let colors = [];
 	    let lastColor = null;
 	    for(const point of data) {
-		let curLatLg = new L.LatLng(point[0], point[1]);
-		point.latlng = curLatLg;
-		point.altitude = point.latLng.alt; // XXX note the almost duplicate name
-				//  at the moment, need to make data format more clear!!!
 		if(lastPoint != null) {
-		    cumDistance += lastPoint.distanceTo(curLatLg);
-		    lastPoint = curLatLg;
+		    cumDistance += lastPoint.distanceTo(point);
 		}
-		point.position = cumDistance / 1000;
-		lastPoint = curLatLg;
+		point._position = cumDistance / 1000;
+		lastPoint = point;
 
 		// Because svg will translate/transform everything anyway why bother
 		// converting it? just just meters for both axes directly ...
 		// Possible limits are 32bit for values so avoid tracks longer then
 		// 2,147,483 km!
-		pathlist.push(`L${cumDistance} ${(point.latLng.alt||0)+altitudeOffset}`);
+		pathlist.push(`L${cumDistance} ${(point.alt||0)+altitudeOffset}`);
 
-		const pointColor = this.getRGBForValue(point[2]);
+		const pointColor = this.getRGBForValue(point._value);
 		if(pointColor != lastColor) {
 		    colors.push([cumDistance, pointColor]);
 		    lastColor = pointColor;
@@ -375,10 +374,10 @@ import { symbol, symbolTriangle } from 'd3-shape'
             if (!data || data.length < 1) {
                 return null;
             }
-            let full_extent = new L.latLngBounds(data[0].latlng, data[0].latlng);
+            let full_extent = new L.latLngBounds(data[0], data[0]);
             data.forEach((item) => {
-                if (!full_extent.contains(item.latlng)) {
-                    full_extent.extend(item.latlng);
+                if (!full_extent.contains(item)) {
+                    full_extent.extend(item);
                 }
             });
             return full_extent;
@@ -392,7 +391,7 @@ import { symbol, symbolTriangle } from 'd3-shape'
             if (start !== end) {
                 ext = this._calculateFullExtent(this._data.slice(start, end + 1));
             } else if (this._data.length > 0) {
-                ext = [this._data[start].latlng, this._data[end].latlng];
+                ext = [this._data[start], this._data[end]];
             }
             if (ext) this._map.fitBounds(ext);
         },
@@ -770,7 +769,7 @@ import { symbol, symbolTriangle } from 'd3-shape'
          * @return {boolean} true, if elevation value is defined, false otherwise
          */
         _defined(d) {
-            return d && d.altitude !== undefined && d.altitude !== null;
+            return d && d.alt !== undefined && d.alt !== null;
         },
         // grid lines in x axis function
         _make_x_axis() {
@@ -840,8 +839,8 @@ import { symbol, symbolTriangle } from 'd3-shape'
             // to the mouse handler.
 	    var ix = 0; 
             for (const item of this._data) {
-                let latDiff = event.latlng.lat - item.latlng.lat;
-                let lngDiff = event.latlng.lng - item.latlng.lng;
+                let latDiff = event.latlng.lat - item.lat;
+                let lngDiff = event.latlng.lng - item.lng;
                 // first check for an almost exact match; it's simple and avoid further calculations
                 if (Math.abs(latDiff) < exactMatchRounding && Math.abs(lngDiff) < exactMatchRounding) {
                     this._internalMousemoveHandler(item, ix, showMapMarker);
@@ -872,14 +871,13 @@ import { symbol, symbolTriangle } from 'd3-shape'
         /*
          * Handles the mouseover, given the current item the mouse is over
          */
-        _internalMousemoveHandler(item, ix, showMapMarker = true) {
-            const alt = this._defined(item) ? item.altitude : '-', 
-		dist = item.position,
-                ll = item.latlng;
-	    const type = item.value_text;
+        _internalMousemoveHandler(point, ix, showMapMarker = true) {
+            const alt = this._defined(point) ? point.alt : '-', 
+		dist = point._position;
+	    const type = this.options.value2text(point._value);
             const boxWidth = this._dynamicBoxSize(".focusbox text")[1] + 10
             if (showMapMarker) {
-                this._showMapMarker(ll, alt, type);
+                this._showMapMarker(point, alt, type);
             }
             // If the user has selected an area, show the cumulated values
             if (this._dragStartCoords) {
@@ -938,11 +936,11 @@ import { symbol, symbolTriangle } from 'd3-shape'
                prev = item;
                continue;
              }
-             let single_dst = prev.latlng.distanceTo(item.latlng);
+             let single_dst = prev.distanceTo(item);
              // 
              delta_dst += single_dst;
              dst += single_dst;
-             let hdiff = item.altitude - prev.altitude;
+             let hdiff = item.alt - prev.alt;
              delta_hd += hdiff;
              let abs_hd = Math.abs(delta_hd);
              prev = item;
@@ -973,14 +971,14 @@ import { symbol, symbolTriangle } from 'd3-shape'
 	/* Looking at some index pos into the data sum up the length with
 	 * the same value e.g. length with same incline and therefore color */
 	_getLengthSameValue(pos) {
-	    const item = this._data[pos];
-	    let start = item.position, end = item.position;
-	    const val = item[2];
-	    for(let i = pos; i >= 0 && this._data[i][2] === val; i--) {
-		start = this._data[i].position;
+	    const point = this._data[pos];
+	    let start = point._position, end = point._position;
+	    const val = point._value;
+	    for(let i = pos; i >= 0 && this._data[i]._value === val; i--) {
+		start = this._data[i]._position;
 	    }
-	    for(let i = pos; i < this._data.length && this._data[i][2] === val; i++) {
-		end = this._data[i].position;
+	    for(let i = pos; i < this._data.length && this._data[i]._value === val; i++) {
+		end = this._data[i]._position;
 	    }
 	    return end - start;
 	},
@@ -988,7 +986,7 @@ import { symbol, symbolTriangle } from 'd3-shape'
          * Finds a data entry for a given x-coordinate of the diagram
          */
         _findItemForX(x) {
-            const bisect = bisector(d => d.position).left
+            const bisect = bisector(d => d._position).left
             const xInvert = this._x.invert(x)
             return bisect(this._data, xInvert);
         },
@@ -1000,7 +998,7 @@ import { symbol, symbolTriangle } from 'd3-shape'
                 //save indexes of elevation values above the horizontal line
                 const list = []
                 for (let i = 0; i < b.length; i++) {
-                    if (b[i].altitude >= yInvert) {
+                    if (b[i].alt >= yInvert) {
                         list.push(i);
                     }
                 }
@@ -1017,7 +1015,7 @@ import { symbol, symbolTriangle } from 'd3-shape'
                 //get lat lon coordinates based on indexes
                 for (let k = 0; k < newList.length; k++) {
                     for (let l = 0; l < newList[k].length; l++) {
-                        newList[k][l] = b[newList[k][l]].latlng;
+                        newList[k][l] = b[newList[k][l]];
                     }
                 }
                 return newList;
