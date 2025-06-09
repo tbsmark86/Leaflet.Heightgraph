@@ -53,7 +53,8 @@ import { symbol, symbolTriangle } from 'd3-shape'
 	    palette_size: 30,
 	    palette_minValue: undefined,
 	    palette_maxValue: undefined,
-	    value2text: (val) => {return val;}
+	    value2text: (val) => {return val;},
+	    extratext: (val) => {return [];}
         },
         _defaultTranslation: {
             distance: "Distance",
@@ -64,6 +65,8 @@ import { symbol, symbolTriangle } from 'd3-shape'
             selection_dist: "Distance",
             selection_ascend: "Elevation Gain",
             selection_descend: "Elevation Loss",
+	    extra0: ' ', // dummy
+	    extra1: ' ',
         },
         _init_options() {
             this._margin = this.options.margins;
@@ -506,12 +509,12 @@ import { symbol, symbolTriangle } from 'd3-shape'
                 .attr("width", maxWidth + 10)
                 .attr("height", maxHeight);
         },
+	_focusTextDistance: 15,
         /**
          *  Creates focus Line and focus box while hovering
          */
         _createFocus() {
             const boxPosition = this._elevationBounds.min
-            const textDistance = 15
             if (this._focus) {
                 this._focus.remove();
                 this._focusLineGroup.remove();
@@ -523,84 +526,45 @@ import { symbol, symbolTriangle } from 'd3-shape'
                 .attr("x", 3)
                 .attr("y", -this._y(boxPosition))
                 .attr("display", "none");
-            // text line 1
-            this._focusDistance = this._focus.append("text")
-                .attr("x", 7)
-                .attr("y", -this._y(boxPosition) + textDistance)
-                .attr("id", "heightgraph.distance")
-                .text(this._getTranslation('distance') + ':');
-            // text line 2
-            this._focusHeight = this._focus.append("text")
-                .attr("x", 7)
-                .attr("y", -this._y(boxPosition) + 2 * textDistance)
-                .attr("id", "heightgraph.height")
-                .text(this._getTranslation('elevation') + ':');
-            // text line 3
-            this._focusBlockDistance = this._focus.append("text")
-                .attr("x", 7)
-                .attr("y", -this._y(boxPosition) + 3 * textDistance)
-                .attr("id", "heightgraph.blockdistance")
-                .text(this._getTranslation('segment_length') + ':');
-            // text line 4
-            this._focusType = this._focus.append("text")
-                .attr("x", 7)
-                .attr("y", -this._y(boxPosition) + 4 * textDistance)
-                .attr("id", "heightgraph.type")
-                .text(this._getTranslation('type') + ':');
-	    // text line 5 (optional)
-	    this._focusSelection = this._focus.append("text")
-		.attr("x", 7)
-		.attr("y", -this._y(boxPosition) + 5 * textDistance)
-		.attr("id", "heightgraph.select")
-		.text(this._getTranslation('selection'));
-	    // text line 6
-	    this._focusSelectionDistance = this._focus.append("text")
-		.attr("x", 15)
-		.attr("y", -this._y(boxPosition) + 6 * textDistance)
-		.attr("id", "heightgraph.select_dist")
-		.text(this._getTranslation('selection_dist') + ':');
-	   // text line 7
-	    this._focusSelectionAscend = this._focus.append("text")
-		.attr("x", 15)
-		.attr("y", -this._y(boxPosition) + 7 * textDistance)
-		.attr("id", "heightgraph.select_asc")
-		.text(this._getTranslation('selection_ascend') + ':');
-	    // text line 8
-	    this._focusSelectionDescend = this._focus.append("text")
-		.attr("x", 15)
-		.attr("y", -this._y(boxPosition) + 8 * textDistance)
-		.attr("id", "heightgraph.select_desc")
-		.text(this._getTranslation('selection_descend') + ':');
-            this._areaTspan = this._focusBlockDistance.append('tspan')
-                .attr("class", "tspan");
-            this._typeTspan = this._focusType.append('tspan')
-                .attr("class", "tspan");
-            const height = this._dynamicBoxSize(".focusbox text")[0]
+
+	    this._focusLines = {};
+	    this._focusSpans = {};
+	    let cnt = 1;
+	    for(const name of ['distance', 'elevation', 'segment_length', 'type',
+		'selection', 'selection_dist', 'selection_ascend', 'selection_descend',
+		'extra0', 'extra1'
+	    ]) {
+		this._focusLines[name] = this._focus.append('text')
+		    .attr('x', 7)
+		    .attr('y', -this._y(boxPosition) + (cnt * this._focusTextDistance))
+		    .attr('id', `heightgraph.${name}`);
+		this._focusLines[name].append('tspan')
+		    .text(this._getTranslation(name) + ':');
+		this._focusSpans[name] = this._focusLines[name].append('tspan')
+		    .attr('class', 'tspan');
+		cnt++;
+	    }
+	    const height = this._dynamicBoxSize(".focusbox text")[0];
             selectAll('.focusbox rect')
-                .attr("height", height * textDistance + (textDistance / 2))
+                .attr("height", height * this._focusTextDistance + (this._focusTextDistance / 2))
                 .attr("display", "block");
             this._focusLineGroup = this._svg.append("g")
                 .attr("class", "focusLine");
             this._focusLine = this._focusLineGroup.append("line")
                 .attr("y1", 0)
                 .attr("y2", this._y(this._elevationBounds.min));
-            this._distTspan = this._focusDistance.append('tspan')
-                .attr("class", "tspan");
-            this._altTspan = this._focusHeight.append('tspan')
-                .attr("class", "tspan");
-            this._selDistTspan = this._focusSelectionDistance.append('tspan')
-                 .attr("class", "tspan");
-            this._selAscTspan = this._focusSelectionAscend.append('tspan')
-                 .attr("class", "tspan");
-            this._selDescTspan = this._focusSelectionDescend.append('tspan')
-                 .attr("class", "tspan");
         },
+	_focusShowSelection() {
+	    this._focusLines.selection.style('display', 'block');
+	    this._focusLines.selection_dist.style('display', 'block');
+	    this._focusLines.selection_ascend.style('display', 'block');
+	    this._focusLines.selection_descend.style('display', 'block');
+	},
         _focusHideSelection() {
-	    this._focusSelection.style("display", "none");
-	    this._focusSelectionAscend.style("display", "none");
-	    this._focusSelectionDescend.style("display", "none");
-	    this._focusSelectionDistance.style("display", "none");
-	    this._focusRect.attr("height", 4 * 15 + 5);
+	    this._focusLines.selection.style('display', 'none');
+	    this._focusLines.selection_dist.style('display', 'none');
+	    this._focusLines.selection_ascend.style('display', 'none');
+	    this._focusLines.selection_descend.style('display', 'none');
 	},
         /**
          *  Creates horizontal Line for dragging
@@ -896,30 +860,50 @@ import { symbol, symbolTriangle } from 'd3-shape'
             const alt = this._defined(point) ? point.alt : '-', 
 		dist = point._position;
 	    const type = this.options.value2text(point._value);
+	    const extra = this.options.extratext(point);
             const boxWidth = this._dynamicBoxSize(".focusbox text")[1] + 10
             if (showMapMarker) {
                 this._showMapMarker(point, alt, type);
             }
+	    let lines = 4;
             // If the user has selected an area, show the cumulated values
             if (this._dragStartCoords) {
               let ix1 = this._findItemForX(this._dragStartCoords[0]);
               let [dst, ascend, descend] = this._cumulatedValues(ix1, ix);
-              this._focusSelection.style("display", "block");
-              this._focusSelectionAscend.style("display", "block");
-              this._focusSelectionDescend.style("display", "block");
-              this._focusSelectionDistance.style("display", "block");
-              this._selAscTspan.text(" " + ascend.toFixed(1) + " m");
-              this._selDescTspan.text(" " + descend.toFixed(1)+ " m");
-              this._selDistTspan.text(" " + (dst/1000.0).toFixed(1) + " km");
-              this._focusRect.attr("height", 8 * 15 + 5);
+	      this._focusShowSelection();
+	      lines += 4;
+              this._focusSpans.selection_ascend.text(" " + ascend.toFixed(1) + " m");
+              this._focusSpans.selection_descend.text(" " + descend.toFixed(1)+ " m");
+              this._focusSpans.selection_dist.text(" " + (dst/1000.0).toFixed(1) + " km");
             // If the area has been removed, hide them again.
             } else if (!this._dragRectangle){
 	      this._focusHideSelection();
-            }
-            this._distTspan.text(" " + dist.toFixed(1) + ' km');
-            this._altTspan.text(" " + alt + ' m');
-            this._areaTspan.text(` ${this._getLengthSameValue(ix).toFixed(1)} km`);
-            this._typeTspan.text(" " + type);
+            } else {
+	      lines += 4;
+	    }
+            this._focusSpans.distance.text(" " + dist.toFixed(1) + ' km');
+            this._focusSpans.elevation.text(" " + alt + ' m');
+            this._focusSpans.segment_length.text(` ${this._getLengthSameValue(ix).toFixed(1)} km`);
+            this._focusSpans.type.text(" " + type);
+
+	    let cnt = 0;
+	    for(const t of extra) {
+		lines++;
+
+		if(cnt > 1) {
+		    throw new Error('To many extra values!');
+		}
+		this._focusLines[`extra${cnt}`].style('display', 'block')
+		    .attr('y', -this._y(this._elevationBounds.min) + (lines * this._focusTextDistance))
+		    .select('tspan:first-child').text(t[0] + ':');
+		this._focusSpans[`extra${cnt}`].text(' ' + t[1]);
+		cnt++;
+	    }
+	    while(cnt < 2) {
+		this._focusLines[`extra${cnt}`].style('display', 'none');
+		cnt++;
+	    }
+
             this._focusRect.attr("width", boxWidth);
             this._focusLine.style("display", "block")
                 .attr('x1', this._x(dist))
@@ -934,6 +918,7 @@ import { symbol, symbolTriangle } from 'd3-shape'
                 this._focus.style("display", "initial")
                     .attr("transform", "translate(" + xPositionBox + "," + this._y(this._elevationBounds.min) + ")");
             }
+	    this._focusRect.attr('height', lines * this._focusTextDistance + 5);
         },
         _cumulatedValues(ix1, ix2) {
            // To avoid unneccessary recalculations for minimal changes, the previous calculation is returned
