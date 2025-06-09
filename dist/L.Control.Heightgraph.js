@@ -4282,29 +4282,50 @@
   	    this._createHorizontalLine();
   	},
   	_prepareData(data) {
-  	    let maxAlt = 10, minAlt = 0;
+  	    let maxAlt = Number.MIN_SAFE_INTEGER, minAlt = Number.MAX_SAFE_INTEGER;
   	    let minValue = Number.MAX_SAFE_INTEGER, maxValue = Number.MIN_SAFE_INTEGER;
   	    for(const point of data) {
-  		maxAlt = Math.max(maxAlt, point.alt);
-  		minAlt = Math.min(minAlt, point.alt);
+  		if(!isNaN(point.alt)) {
+  		    maxAlt = Math.max(maxAlt, point.alt);
+  		    minAlt = Math.min(minAlt, point.alt);
+  		}
+  		if(isNaN(point._value)) {
+  		    // value is required, therefore use default
+  		    point._value = 0;
+  		}
   		maxValue = Math.max(maxValue, point._value);
   		minValue = Math.min(minValue, point._value);
   	    }
   	    if(this._palette.min === undefined) {
   		this._palette.min = minValue;
   	    }
+  	    // not used internally but allowed for external use
+  	    this._palette.realMin = minValue;
   	    if(this._palette.max === undefined) {
   		this._palette.max = maxValue;
   	    }
+  	    this._palette.realMax = maxValue;
+
+  	    if(maxAlt == Number.MIN_SAFE_INTEGER) {
+  		maxAlt = 0;
+  	    }
+  	    if(minAlt == Number.MAX_SAFE_INTEGER) {
+  		minAlt = 0;
+  	    }
+  	    maxAlt = Math.max(maxAlt, 10);
   	    let altitudeRange = maxAlt - minAlt;
-              this._elevationBounds = {
-                  min: altitudeRange < 10 ? minAlt - 10 : minAlt - 0.1 * altitudeRange,
-                  max: altitudeRange < 10 ? maxAlt + 10 : maxAlt + 0.1 * altitudeRange
-              };
+  	    this._elevationBounds = {min: minAlt, max: maxAlt};
+  	    /* always add a little head room to the graph */
+  	    this._elevationBounds.max += Math.max(10, Math.min(0.1 * altitudeRange, 100));
+  	    if(minAlt > 0) {
+  		/* bottom room, but avoid going below zero if not required */
+  		this._elevationBounds.min -= Math.max(10, Math.min(0.1 * altitudeRange, 100));
+  		this._elevationBounds.min = Math.max(this._elevationBounds.min, 0);
+  	    }
   	    altitudeRange = this._elevationBounds.max - this._elevationBounds.min;
   	    // for ease of calculation we normalizes altitude to start at zero
   	    // for the actual drawing.
-  	    const altitudeOffset = Math.abs(this._elevationBounds.min);
+  	    const altitudeOffset = this._elevationBounds.min < 0 ? Math.abs(this._elevationBounds.min) : -this._elevationBounds.min;
 
   	    let cumDistance = 0;
   	    let lastPoint = null;
