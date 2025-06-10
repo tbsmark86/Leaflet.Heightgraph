@@ -87,6 +87,18 @@ import { symbol, symbolTriangle } from 'd3-shape'
                 const link = L.DomUtil.create("a", "heightgraph-toggle-icon", buttonContainer)
                 const closeButton = this._closeButton = L.DomUtil.create("a", "heightgraph-close-icon", container)
             }
+
+	    this._zoomResetButton = L.DomUtil.create('button', 'heightgraph-zoom-reset', container);
+	    // these classes work together with brouter-web
+	    this._zoomResetButton.className = 'btn btn-outline-secondary btn-xs';
+	    this._zoomResetButton.type = 'button';
+	    this._zoomResetButton.hidden = true;
+	    this._zoomResetButton.style.position = 'absolute';
+	    this._zoomResetButton.style.top = '15px';
+	    this._zoomResetButton.style.left = '70px';
+	    let icon = L.DomUtil.create('span', 'fa fa-search-minus', this._zoomResetButton);
+            L.DomEvent.on(this._zoomResetButton, 'click', this._resetDrag, this);
+
             this._showState = false;
             this._initToggle();
             this._init_options();
@@ -96,6 +108,7 @@ import { symbol, symbolTriangle } from 'd3-shape'
                 .attr("height", this._height).append("g")
                 .attr("transform", "translate(" + this._margin.left + "," + this._margin.top + ")")
             if (this.options.expand) this._expand();
+
             return container;
         },
         onRemove(map) {
@@ -164,21 +177,22 @@ import { symbol, symbolTriangle } from 'd3-shape'
          * Internal function. Overloads public addData().
          * Call with resize = true when resizing instead of actually adding data.
          * TODO: this should be refactored to avoid calling addData on resize
+	 *	 (Note that this also resets the selection/zoom)
          * @param data
          * @private
          */
-	_addData(data) {
+	_addData(data, start, end) {
 	    if (this._svg !== undefined) {
                 this._svg.selectAll("*")
                     .remove();
             }
             this._removeMarkedSegmentsOnMap();
-            this._resetDrag(true);
+	    this._resetDrag(true);
 
 	    this._data = data;
             this._init_options();
 
-	    const drawData = this._prepareData(data);
+	    const drawData = this._prepareData(data, start, end);
             this._appendScales();
             this._appendGrid();
 	    this._drawData(data, drawData);
@@ -187,8 +201,10 @@ import { symbol, symbolTriangle } from 'd3-shape'
 	    this._createFocus();
 	    this._appendBackground();
 	    this._createHorizontalLine();
+
+	    this._zoomResetButton.hidden = start != null ? false : true;
 	},
-	_prepareData(data) {
+	_prepareData(data, start, end) {
 	    let maxAlt = Number.MIN_SAFE_INTEGER, minAlt = Number.MAX_SAFE_INTEGER;
 	    let minValue = Number.MAX_SAFE_INTEGER, maxValue = Number.MIN_SAFE_INTEGER;
 	    for(const point of data) {
@@ -234,16 +250,28 @@ import { symbol, symbolTriangle } from 'd3-shape'
 	    // for the actual drawing.
 	    const altitudeOffset = this._elevationBounds.min < 0 ? Math.abs(this._elevationBounds.min) : -this._elevationBounds.min;
 
-	    let cumDistance = 0;
+	    let cumDistance = 0, offsetDistance = 0;
 	    let lastPoint = null;
 	    let pathlist = ['M0 0'];
 	    let colors = [];
 	    let lastColor = null;
-	    for(const point of data) {
+	    
+	    start = Math.max(start || 0, 0);
+	    end = Math.min(end || data.length, data.length);
+	    for(let i = 0; i < start; i++) {
+		const point = data[i];
+		if(lastPoint != null) {
+		    offsetDistance += lastPoint.distanceTo(point);
+		}
+		lastPoint = point;
+	    }
+	    lastPoint = null;
+	    for(let i = start; i < end; i++) {
+		const point = data[i];
 		if(lastPoint != null) {
 		    cumDistance += lastPoint.distanceTo(point);
 		}
-		point._position = cumDistance / 1000;
+		point._position = (offsetDistance + cumDistance) / 1000;
 		lastPoint = point;
 
 		// Because svg will translate/transform everything anyway why bother
@@ -258,7 +286,8 @@ import { symbol, symbolTriangle } from 'd3-shape'
 		    lastColor = pointColor;
 		}
 	    }
-            this._totalDistance = cumDistance / 1000;
+            this._offsetDistance = offsetDistance / 1000;
+            this._totalDistance = (offsetDistance + cumDistance) / 1000;
 
 	    return {altitudeRange, cumDistance, pathlist, colors};
 	},
@@ -359,14 +388,18 @@ import { symbol, symbolTriangle } from 'd3-shape'
             if (this._dragRectangle) {
                 this._dragRectangle.remove();
                 this._dragRectangle = null;
-
+	    }
+            if (this._isZoomed) {
                 if (skipMapFitBounds !== true) {
                     // potential performance improvement:
                     // we could cache the full extend when addData() is called
                     let fullExtent = this._calculateFullExtent(this._data);
                     if (fullExtent) this._map.fitBounds(fullExtent);
 	            this._focusHideSelection();
+
+		    this._addData(this._data);
                 }
+		this._isZoomed = false;
             }
         },
         /**
@@ -376,7 +409,6 @@ import { symbol, symbolTriangle } from 'd3-shape'
             if (!this._dragStartCoords || !this._gotDragged) {
                 this._dragStartCoords = null;
                 this._gotDragged = false;
-                this._resetDrag();
                 return;
             }
             const item1 = this._findItemForX(this._dragStartCoords[0]),
@@ -407,7 +439,7 @@ import { symbol, symbolTriangle } from 'd3-shape'
             return full_extent;
         },
         /**
-         * Make the map fit the route section between given indexes.
+         * Make the map&graph fit the route section between given indexes.
          */
         _fitSection(index1, index2) {
             const start = Math.min(index1, index2), end = Math.max(index1, index2)
@@ -418,6 +450,12 @@ import { symbol, symbolTriangle } from 'd3-shape'
                 ext = [this._data[start], this._data[end]];
             }
             if (ext) this._map.fitBounds(ext);
+
+	    this._addData(this._data, index1, index2);
+	    this._isZoomed = true;
+	    if(this._focusRestoreSelectionAfterZoom) {
+		this._focusRestoreSelectionAfterZoom();
+	    }
         },
         /**
          * Expand container when button clicked and shrink when close-Button clicked
@@ -677,7 +715,7 @@ import { symbol, symbolTriangle } from 'd3-shape'
                 .range([0, this._svgWidth]);
             this._y = scaleLinear()
                 .range([this._svgHeight, 0]);
-            this._x.domain([0, this._totalDistance]);
+            this._x.domain([this._offsetDistance, this._totalDistance]);
             this._y.domain([this._elevationBounds.min, this._elevationBounds.max]);
             this._xAxis = axisBottom()
                 .scale(this._x)
@@ -868,15 +906,18 @@ import { symbol, symbolTriangle } from 'd3-shape'
 	    let lines = 4;
             // If the user has selected an area, show the cumulated values
             if (this._dragStartCoords) {
+	      lines += 4;
               let ix1 = this._findItemForX(this._dragStartCoords[0]);
               let [dst, ascend, descend] = this._cumulatedValues(ix1, ix);
-	      this._focusShowSelection();
-	      lines += 4;
-              this._focusSpans.selection_ascend.text(" " + ascend.toFixed(1) + " m");
-              this._focusSpans.selection_descend.text(" " + descend.toFixed(1)+ " m");
-              this._focusSpans.selection_dist.text(" " + (dst/1000.0).toFixed(1) + " km");
+	      this._focusRestoreSelectionAfterZoom = () => {
+		  this._focusShowSelection();
+		  this._focusSpans.selection_ascend.text(" " + ascend.toFixed(1) + " m");
+		  this._focusSpans.selection_descend.text(" " + descend.toFixed(1)+ " m");
+		  this._focusSpans.selection_dist.text(" " + (dst/1000.0).toFixed(1) + " km");
+	      }
+	      this._focusRestoreSelectionAfterZoom();
             // If the area has been removed, hide them again.
-            } else if (!this._dragRectangle){
+            } else if (!this._isZoomed){
 	      this._focusHideSelection();
             } else {
 	      lines += 4;
